@@ -61,15 +61,36 @@ public sealed class Lexer(string source)
                 {
                     "let" => TokenType.Let,
                     "in" => TokenType.In,
+                    "if" => TokenType.If,
+                    "then" => TokenType.Then,
+                    "else" => TokenType.Else,
+                    "true" => TokenType.True,
+                    "false" => TokenType.False,
                     _ => TokenType.Identifier,
                 };
                 tokens.Add(new Token(type, text, new SourcePosition(line, startColumn)));
                 continue;
             }
 
+            if (c is '=' or '<' or '>' && i + 1 < source.Length && source[i + 1] == '=')
+            {
+                var twoCharType = c switch
+                {
+                    '=' => TokenType.EqualsEquals,
+                    '<' => TokenType.LessEquals,
+                    _ => TokenType.GreaterEquals,
+                };
+                tokens.Add(new Token(twoCharType, source.Substring(i, 2), new SourcePosition(line, startColumn)));
+                i += 2;
+                column += 2;
+                continue;
+            }
+
             var single = c switch
             {
                 '=' => TokenType.Equals,
+                '<' => TokenType.Less,
+                '>' => TokenType.Greater,
                 '+' => TokenType.Plus,
                 '-' => TokenType.Minus,
                 '*' => TokenType.Star,

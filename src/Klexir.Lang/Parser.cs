@@ -3,7 +3,8 @@ using MonadicSharp;
 namespace Klexir.Lang;
 
 /// <summary>
-/// Recursive-descent parser. Precedence, loosest to tightest: <c>let ... in</c>, additive (+ -), multiplicative (* /), primary.
+/// Recursive-descent parser. Precedence, loosest to tightest: <c>let ... in</c> / <c>if ... then ... else</c>,
+/// comparison (== &lt; &gt; &lt;= &gt;=, non-chaining), additive (+ -), multiplicative (* /), primary.
 /// </summary>
 public sealed class Parser(IReadOnlyList<Token> tokens)
 {
@@ -13,7 +14,7 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
 
     public Result<Expr> ParseExpression()
     {
-        var expr = ParseLetOrAdditive();
+        var expr = ParseTop();
         if (expr.IsFailure)
         {
             return expr;
@@ -24,8 +25,13 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
             : Result<Expr>.Failure(Error.Create($"Unexpected token '{Current.Text}' at {Current.Position}."));
     }
 
-    private Result<Expr> ParseLetOrAdditive() =>
-        Current.Type == TokenType.Let ? ParseLet() : ParseAdditive();
+    private Result<Expr> ParseTop() =>
+        Current.Type switch
+        {
+            TokenType.Let => ParseLet(),
+            TokenType.If => ParseIf(),
+            _ => ParseComparison(),
+        };
 
     private Result<Expr> ParseLet()
     {
@@ -46,7 +52,7 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
 
         _position++;
 
-        var value = ParseAdditive();
+        var value = ParseTop();
         if (value.IsFailure)
         {
             return value;
@@ -59,8 +65,73 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
 
         _position++;
 
-        var body = ParseLetOrAdditive();
+        var body = ParseTop();
         return body.IsFailure ? body : Result<Expr>.Success(new LetExpr(name, value.Value, body.Value));
+    }
+
+    private Result<Expr> ParseIf()
+    {
+        _position++; // 'if'
+
+        var condition = ParseComparison();
+        if (condition.IsFailure)
+        {
+            return condition;
+        }
+
+        if (Current.Type != TokenType.Then)
+        {
+            return Result<Expr>.Failure(Error.Create($"Expected 'then' at {Current.Position}."));
+        }
+
+        _position++;
+
+        var thenBranch = ParseTop();
+        if (thenBranch.IsFailure)
+        {
+            return thenBranch;
+        }
+
+        if (Current.Type != TokenType.Else)
+        {
+            return Result<Expr>.Failure(Error.Create($"Expected 'else' at {Current.Position}."));
+        }
+
+        _position++;
+
+        var elseBranch = ParseTop();
+        return elseBranch.IsFailure
+            ? elseBranch
+            : Result<Expr>.Success(new IfExpr(condition.Value, thenBranch.Value, elseBranch.Value));
+    }
+
+    private Result<Expr> ParseComparison()
+    {
+        var left = ParseAdditive();
+        if (left.IsFailure)
+        {
+            return left;
+        }
+
+        if (Current.Type is not (TokenType.EqualsEquals or TokenType.Less or TokenType.Greater or TokenType.LessEquals or TokenType.GreaterEquals))
+        {
+            return left;
+        }
+
+        var op = Current.Type switch
+        {
+            TokenType.EqualsEquals => ComparisonOperator.Equal,
+            TokenType.Less => ComparisonOperator.LessThan,
+            TokenType.Greater => ComparisonOperator.GreaterThan,
+            TokenType.LessEquals => ComparisonOperator.LessThanOrEqual,
+            _ => ComparisonOperator.GreaterThanOrEqual,
+        };
+        _position++;
+
+        var right = ParseAdditive();
+        return right.IsFailure
+            ? right
+            : Result<Expr>.Success(new ComparisonExpr(op, left.Value, right.Value));
     }
 
     private Result<Expr> ParseAdditive()
@@ -126,6 +197,14 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
                 _position++;
                 return Result<Expr>.Success(new IntLiteral(intValue));
 
+            case TokenType.True:
+                _position++;
+                return Result<Expr>.Success(new BoolLiteral(true));
+
+            case TokenType.False:
+                _position++;
+                return Result<Expr>.Success(new BoolLiteral(false));
+
             case TokenType.Identifier:
                 var name = Current.Text;
                 _position++;
@@ -133,7 +212,7 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
 
             case TokenType.LParen:
                 _position++;
-                var inner = ParseLetOrAdditive();
+                var inner = ParseTop();
                 if (inner.IsFailure)
                 {
                     return inner;
