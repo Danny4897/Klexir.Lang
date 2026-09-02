@@ -45,6 +45,21 @@ public sealed record ListType(KlexirType Element) : KlexirType
     public override string ToString() => $"List<{Element}>";
 }
 
+/// <summary>
+/// A user-defined record type, nominal: two <see cref="RecordType"/>s are equal exactly when their
+/// <see cref="Name"/>s match (Klexir has one record declaration per name, so this is exactly right — it also
+/// lets an unresolved forward reference, an empty <see cref="Fields"/> placeholder from a type annotation parsed
+/// before its <c>record</c> declaration is checked, compare equal to the real, fully-populated one).
+/// </summary>
+public sealed record RecordType(string Name, IReadOnlyList<(string FieldName, KlexirType FieldType)> Fields) : KlexirType
+{
+    public bool Equals(RecordType? other) => other is not null && Name == other.Name;
+
+    public override int GetHashCode() => Name.GetHashCode();
+
+    public override string ToString() => Name;
+}
+
 public abstract record TypedExpr(KlexirType Type);
 
 public sealed record TypedIntLiteral(long Value) : TypedExpr(KlexirType.Int);
@@ -95,3 +110,7 @@ public sealed record TypedEmptyListExpr(KlexirType Type) : TypedExpr(Type);
 public sealed record TypedFilterExpr(TypedExpr List, TypedExpr Predicate, KlexirType Type) : TypedExpr(Type);
 
 public sealed record TypedFoldExpr(TypedExpr List, TypedExpr Initial, TypedExpr Folder, KlexirType Type) : TypedExpr(Type);
+
+public sealed record TypedRecordConstructExpr(string TypeName, IReadOnlyList<(string FieldName, TypedExpr Value)> Fields, KlexirType Type) : TypedExpr(Type);
+
+public sealed record TypedFieldAccessExpr(TypedExpr Receiver, string FieldName, KlexirType Type) : TypedExpr(Type);

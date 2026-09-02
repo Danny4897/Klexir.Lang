@@ -90,6 +90,7 @@ public sealed class Lexer(string source)
                     "bind" => TokenType.Bind,
                     "filter" => TokenType.Filter,
                     "fold" => TokenType.Fold,
+                    "record" => TokenType.Record,
                     _ => TokenType.Identifier,
                 };
                 tokens.Add(new Token(type, text, new SourcePosition(line, startColumn)));
@@ -131,10 +132,13 @@ public sealed class Lexer(string source)
                 ')' => TokenType.RParen,
                 '[' => TokenType.LBracket,
                 ']' => TokenType.RBracket,
+                '{' => TokenType.LBrace,
+                '}' => TokenType.RBrace,
                 ':' => TokenType.Colon,
                 ',' => TokenType.Comma,
                 '|' => TokenType.Pipe,
                 ';' => TokenType.Semicolon,
+                '.' => TokenType.Dot,
                 _ => (TokenType?)null,
             };
 

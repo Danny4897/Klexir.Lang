@@ -98,8 +98,34 @@ public sealed class Evaluator
                     .Bind(initial => Evaluate(fold.Folder, environment)
                         .Bind(folder => ApplyFold(list, initial, folder)))),
 
+            TypedRecordConstructExpr construct => EvaluateRecordConstruct(construct, environment),
+
+            TypedFieldAccessExpr access => Evaluate(access.Receiver, environment)
+                .Bind(receiver => receiver is RecordValue record && record.Fields.TryGetValue(access.FieldName, out var value)
+                    ? Result<KlexirValue>.Success(value)
+                    : Result<KlexirValue>.Failure(Error.Create($"Attempted to access field '{access.FieldName}' on a non-record value."))),
+
             _ => Result<KlexirValue>.Failure(Error.Create($"Unsupported typed node '{expr.GetType().Name}'.")),
         };
+
+    private static Result<KlexirValue> EvaluateRecordConstruct(
+        TypedRecordConstructExpr construct, IReadOnlyDictionary<string, KlexirValue> environment)
+    {
+        var fields = new Dictionary<string, KlexirValue>();
+
+        foreach (var (fieldName, fieldExpr) in construct.Fields)
+        {
+            var result = Evaluate(fieldExpr, environment);
+            if (result.IsFailure)
+            {
+                return result;
+            }
+
+            fields[fieldName] = result.Value;
+        }
+
+        return Result<KlexirValue>.Success(new RecordValue(construct.TypeName, fields));
+    }
 
     private static Result<KlexirValue> EvaluateList(
         IReadOnlyList<TypedExpr> elements, IReadOnlyDictionary<string, KlexirValue> environment)

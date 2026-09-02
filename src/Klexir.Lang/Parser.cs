@@ -319,7 +319,14 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
                 return Result<KlexirType>.Success(new ResultType(ok.Value, err.Value));
 
             default:
-                return Result<KlexirType>.Failure(Error.Create($"Unknown type '{name}' at {Current.Position}."));
+                // Any other identifier is taken as a reference to a user-declared record type — possibly one this
+                // parser hasn't reached the 'record' declaration for yet (e.g. inside that record's own fields, or
+                // a function declared before it in program order). RecordType compares equal by name alone, so an
+                // empty-Fields placeholder here is indistinguishable from the real, fully-populated one once the
+                // type checker resolves it against the environment. A name that's never actually a declared record
+                // — a typo, say — isn't caught here; it surfaces later, when something tries to construct it or
+                // access a field on it.
+                return Result<KlexirType>.Success(new RecordType(name, []));
         }
     }
 
@@ -603,6 +610,54 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
         return close.IsFailure ? Result<Expr>.Failure(close.Error) : Result<Expr>.Success(new ListExpr(elements));
     }
 
+    /// <summary><c>{ Field1: expr1, Field2: expr2, ... }</c> (the leading type name is already consumed).</summary>
+    private Result<Expr> ParseRecordConstruct(string typeName)
+    {
+        _position++; // '{'
+
+        var fields = new List<(string FieldName, Expr Value)>();
+
+        if (Current.Type != TokenType.RBrace)
+        {
+            while (true)
+            {
+                if (Current.Type != TokenType.Identifier)
+                {
+                    return Result<Expr>.Failure(Error.Create($"Expected a field name at {Current.Position}."));
+                }
+
+                var fieldName = Current.Text;
+                _position++;
+
+                var colon = Expect(TokenType.Colon, "':'");
+                if (colon.IsFailure)
+                {
+                    return Result<Expr>.Failure(colon.Error);
+                }
+
+                var value = ParseTop();
+                if (value.IsFailure)
+                {
+                    return value;
+                }
+
+                fields.Add((fieldName, value.Value));
+
+                if (Current.Type != TokenType.Comma)
+                {
+                    break;
+                }
+
+                _position++;
+            }
+        }
+
+        var close = Expect(TokenType.RBrace, "'}'");
+        return close.IsFailure
+            ? Result<Expr>.Failure(close.Error)
+            : Result<Expr>.Success(new RecordConstructExpr(typeName, fields));
+    }
+
     /// <summary>Consumes <c>(name)</c> and returns <c>name</c>, e.g. the binder in a <c>Some(x)</c> match arm.</summary>
     private Result<string> ExpectBinderInParens()
     {
@@ -786,7 +841,91 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
                 : Result<Expr>.Success(new LetExpr(header.Value.Name, header.Value.Value, rest.Value));
         }
 
+        if (Current.Type == TokenType.Record)
+        {
+            var decl = ParseRecordDecl();
+            if (decl.IsFailure)
+            {
+                return Result<Expr>.Failure(decl.Error);
+            }
+
+            var semicolon = Expect(TokenType.Semicolon, "';' after a top-level 'record' declaration");
+            if (semicolon.IsFailure)
+            {
+                return Result<Expr>.Failure(semicolon.Error);
+            }
+
+            var rest = ParseProgramBody();
+            return rest.IsFailure
+                ? rest
+                : Result<Expr>.Success(new RecordDeclExpr(decl.Value.Name, decl.Value.Fields, rest.Value));
+        }
+
         return ParseTop();
+    }
+
+    /// <summary>Parses <c>record NAME { Field1: Type1, Field2: Type2, ... }</c> — top-level only, no inline form.</summary>
+    private Result<(string Name, IReadOnlyList<(string FieldName, KlexirType FieldType)> Fields)> ParseRecordDecl()
+    {
+        _position++; // 'record'
+
+        if (Current.Type != TokenType.Identifier)
+        {
+            return Result<(string, IReadOnlyList<(string, KlexirType)>)>.Failure(
+                Error.Create($"Expected a record type name after 'record' at {Current.Position}."));
+        }
+
+        var name = Current.Text;
+        _position++;
+
+        var open = Expect(TokenType.LBrace, "'{'");
+        if (open.IsFailure)
+        {
+            return Result<(string, IReadOnlyList<(string, KlexirType)>)>.Failure(open.Error);
+        }
+
+        var fields = new List<(string FieldName, KlexirType FieldType)>();
+
+        if (Current.Type != TokenType.RBrace)
+        {
+            while (true)
+            {
+                if (Current.Type != TokenType.Identifier)
+                {
+                    return Result<(string, IReadOnlyList<(string, KlexirType)>)>.Failure(
+                        Error.Create($"Expected a field name at {Current.Position}."));
+                }
+
+                var fieldName = Current.Text;
+                _position++;
+
+                var colon = Expect(TokenType.Colon, "':'");
+                if (colon.IsFailure)
+                {
+                    return Result<(string, IReadOnlyList<(string, KlexirType)>)>.Failure(colon.Error);
+                }
+
+                var fieldType = ParseTypeAnnotation();
+                if (fieldType.IsFailure)
+                {
+                    return Result<(string, IReadOnlyList<(string, KlexirType)>)>.Failure(fieldType.Error);
+                }
+
+                fields.Add((fieldName, fieldType.Value));
+
+                if (Current.Type != TokenType.Comma)
+                {
+                    break;
+                }
+
+                _position++;
+            }
+        }
+
+        var close = Expect(TokenType.RBrace, "'}'");
+        return close.IsFailure
+            ? Result<(string, IReadOnlyList<(string, KlexirType)>)>.Failure(close.Error)
+            : Result<(string, IReadOnlyList<(string, KlexirType)>)>.Success((name, fields));
     }
 
     private Result<Expr> ParseIf()
@@ -911,7 +1050,7 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
     /// <summary>Left-associative juxtaposition application (<c>f x y</c> parses as <c>(f x) y</c>), tighter than * /.</summary>
     private Result<Expr> ParseApplication()
     {
-        var left = ParsePrimary();
+        var left = ParsePostfix();
         if (left.IsFailure)
         {
             return left;
@@ -921,13 +1060,40 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
 
         while (Current.Type is TokenType.Int or TokenType.True or TokenType.False or TokenType.Identifier or TokenType.LParen)
         {
-            var arg = ParsePrimary();
+            var arg = ParsePostfix();
             if (arg.IsFailure)
             {
                 return arg;
             }
 
             expr = new AppExpr(expr, arg.Value);
+        }
+
+        return Result<Expr>.Success(expr);
+    }
+
+    /// <summary>A primary, then any number of <c>.Field</c> accesses — tighter than application, so <c>f x.y</c> is <c>f (x.y)</c>.</summary>
+    private Result<Expr> ParsePostfix()
+    {
+        var result = ParsePrimary();
+        if (result.IsFailure)
+        {
+            return result;
+        }
+
+        var expr = result.Value;
+
+        while (Current.Type == TokenType.Dot)
+        {
+            _position++;
+
+            if (Current.Type != TokenType.Identifier)
+            {
+                return Result<Expr>.Failure(Error.Create($"Expected a field name after '.' at {Current.Position}."));
+            }
+
+            expr = new FieldAccessExpr(expr, Current.Text);
+            _position++;
         }
 
         return Result<Expr>.Success(expr);
@@ -958,7 +1124,9 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
             case TokenType.Identifier:
                 var name = Current.Text;
                 _position++;
-                return Result<Expr>.Success(new Identifier(name));
+                return Current.Type == TokenType.LBrace
+                    ? ParseRecordConstruct(name)
+                    : Result<Expr>.Success(new Identifier(name));
 
             case TokenType.Some:
                 _position++;

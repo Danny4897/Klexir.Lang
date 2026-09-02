@@ -32,9 +32,12 @@ public enum TokenType
     RParen,
     LBracket,
     RBracket,
+    LBrace,
+    RBrace,
     Comma,
     Pipe,
     Semicolon,
+    Dot,
     Match,
     With,
     Some,
@@ -45,6 +48,7 @@ public enum TokenType
     Bind,
     Filter,
     Fold,
+    Record,
     Eof,
 }
 

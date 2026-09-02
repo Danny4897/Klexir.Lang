@@ -36,3 +36,15 @@ public sealed record ListValue(IReadOnlyList<KlexirValue> Elements) : KlexirValu
 
     public override int GetHashCode() => Elements.Aggregate(17, (hash, element) => hash * 31 + element.GetHashCode());
 }
+
+/// <summary>A record value: its declared type name plus its field values by name. Overrides equality to compare
+/// fields by content (see <see cref="ListValue"/> for why the default record equality wouldn't do that).</summary>
+public sealed record RecordValue(string TypeName, IReadOnlyDictionary<string, KlexirValue> Fields) : KlexirValue
+{
+    public bool Equals(RecordValue? other) =>
+        other is not null && TypeName == other.TypeName && Fields.Count == other.Fields.Count
+        && Fields.All(field => other.Fields.TryGetValue(field.Key, out var value) && field.Value.Equals(value));
+
+    public override int GetHashCode() =>
+        Fields.Aggregate(TypeName.GetHashCode(), (hash, field) => hash ^ (field.Key.GetHashCode() * 31 + field.Value.GetHashCode()));
+}

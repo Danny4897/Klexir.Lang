@@ -89,3 +89,15 @@ public sealed record FilterExpr(Expr List, Expr Predicate) : Expr;
 
 /// <summary><c>fold(list, initial, folder)</c> — left-fold; <c>folder</c> is curried as <c>Acc -> Elem -> Acc</c>.</summary>
 public sealed record FoldExpr(Expr List, Expr Initial, Expr Folder) : Expr;
+
+/// <summary>
+/// <c>record NAME { Field1: Type1, Field2: Type2, ... };</c>, scoped over the rest of the program (<see cref="Body"/>)
+/// — a top-level-only declaration, not an inline expression form.
+/// </summary>
+public sealed record RecordDeclExpr(string Name, IReadOnlyList<(string FieldName, KlexirType FieldType)> Fields, Expr Body) : Expr;
+
+/// <summary><c>NAME { Field1: expr1, Field2: expr2, ... }</c>. Field order doesn't matter, but every declared field must appear exactly once.</summary>
+public sealed record RecordConstructExpr(string TypeName, IReadOnlyList<(string FieldName, Expr Value)> Fields) : Expr;
+
+/// <summary><c>receiver.FieldName</c>.</summary>
+public sealed record FieldAccessExpr(Expr Receiver, string FieldName) : Expr;

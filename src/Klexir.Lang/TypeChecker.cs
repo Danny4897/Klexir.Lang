@@ -84,8 +84,86 @@ public sealed class TypeChecker
 
             FoldExpr fold => CheckFold(fold, environment),
 
+            RecordDeclExpr decl => Check(decl.Body, WithBinding(environment, decl.Name, new RecordType(decl.Name, decl.Fields))),
+
+            RecordConstructExpr construct => CheckRecordConstruct(construct, environment),
+
+            FieldAccessExpr access => CheckFieldAccess(access, environment),
+
             _ => Result<TypedExpr>.Failure(Error.Create($"Unsupported expression node '{expr.GetType().Name}'.")),
         };
+
+    private static Result<TypedExpr> CheckRecordConstruct(RecordConstructExpr construct, IReadOnlyDictionary<string, KlexirType> environment)
+    {
+        if (!environment.TryGetValue(construct.TypeName, out var declaredType) || declaredType is not RecordType recordType)
+        {
+            return Result<TypedExpr>.Failure(Error.Create($"'{construct.TypeName}' is not a declared record type."));
+        }
+
+        if (construct.Fields.Count != recordType.Fields.Count)
+        {
+            return Result<TypedExpr>.Failure(Error.Create(
+                $"'{construct.TypeName}' has {recordType.Fields.Count} field(s), but {construct.Fields.Count} were given."));
+        }
+
+        var typedFields = new List<(string FieldName, TypedExpr Value)>();
+        var seen = new HashSet<string>();
+
+        foreach (var (fieldName, fieldExpr) in construct.Fields)
+        {
+            if (!seen.Add(fieldName))
+            {
+                return Result<TypedExpr>.Failure(Error.Create($"Field '{fieldName}' specified more than once."));
+            }
+
+            var declaredField = recordType.Fields.FirstOrDefault(f => f.FieldName == fieldName);
+            if (declaredField.FieldName is null)
+            {
+                return Result<TypedExpr>.Failure(Error.Create($"'{construct.TypeName}' has no field '{fieldName}'."));
+            }
+
+            var valueResult = Check(fieldExpr, environment);
+            if (valueResult.IsFailure)
+            {
+                return valueResult;
+            }
+
+            if (valueResult.Value.Type != declaredField.FieldType)
+            {
+                return Result<TypedExpr>.Failure(Error.Create(
+                    $"Field '{fieldName}' of '{construct.TypeName}' expects {declaredField.FieldType}, got {valueResult.Value.Type}."));
+            }
+
+            typedFields.Add((fieldName, valueResult.Value));
+        }
+
+        return Result<TypedExpr>.Success(new TypedRecordConstructExpr(construct.TypeName, typedFields, recordType));
+    }
+
+    private static Result<TypedExpr> CheckFieldAccess(FieldAccessExpr access, IReadOnlyDictionary<string, KlexirType> environment)
+    {
+        var receiverResult = Check(access.Receiver, environment);
+        if (receiverResult.IsFailure)
+        {
+            return receiverResult;
+        }
+
+        if (receiverResult.Value.Type is not RecordType placeholder
+            || !environment.TryGetValue(placeholder.Name, out var declaredType)
+            || declaredType is not RecordType recordType)
+        {
+            return Result<TypedExpr>.Failure(Error.Create(
+                $"Cannot access field '{access.FieldName}' on non-record type {receiverResult.Value.Type}."));
+        }
+
+        var field = recordType.Fields.FirstOrDefault(f => f.FieldName == access.FieldName);
+        if (field.FieldName is null)
+        {
+            return Result<TypedExpr>.Failure(Error.Create($"'{recordType.Name}' has no field '{access.FieldName}'."));
+        }
+
+        return Result<TypedExpr>.Success(new TypedFieldAccessExpr(receiverResult.Value, access.FieldName, field.FieldType));
+    }
 
     private static Result<TypedExpr> CheckList(ListExpr list, IReadOnlyDictionary<string, KlexirType> environment)
     {
