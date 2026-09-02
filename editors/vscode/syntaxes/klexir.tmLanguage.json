@@ -1,0 +1,96 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Klexir",
+  "scopeName": "source.klexir",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#keywords" },
+    { "include": "#language-constants" },
+    { "include": "#booleans" },
+    { "include": "#types" },
+    { "include": "#numbers" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.klexir",
+          "match": "//.*$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.klexir",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.klexir",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.klexir",
+          "match": "\\b(let|rec|in|if|then|else|fun|match|with|record|union)\\b"
+        },
+        {
+          "name": "keyword.other.klexir",
+          "match": "\\b(map|bind|filter|fold)\\b"
+        }
+      ]
+    },
+    "language-constants": {
+      "patterns": [
+        {
+          "name": "constant.language.klexir.success",
+          "match": "\\b(Some|Ok)\\b"
+        },
+        {
+          "name": "constant.language.klexir.failure",
+          "match": "\\b(None|Err)\\b"
+        }
+      ]
+    },
+    "booleans": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.klexir",
+          "match": "\\b(true|false)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "entity.name.type.klexir",
+          "match": "\\b[A-Z][A-Za-z0-9_]*\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.klexir",
+          "match": "\\b[0-9]+\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.klexir",
+          "match": "=>|->|==|<=|>=|[+\\-*/<>=:|.,;]"
+        }
+      ]
+    }
+  }
+}

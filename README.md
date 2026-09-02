@@ -9,6 +9,30 @@ The Klexir programming language: a lexer, a recursive-descent parser, a structur
 
 ---
 
+## Writing and running `.klx` files
+
+Klexir isn't only a library to embed — `Klexir.Cli` runs a `.klx` file straight from a terminal, and the VS Code extension in [`editors/vscode`](editors/vscode) gives `.klx` files syntax highlighting and a **Run** command (`Ctrl+F5`) right in the editor, the way you'd expect for any language.
+
+```bash
+dotnet run --project src/Klexir.Cli -- run path/to/program.klx
+```
+
+```
+// hello.klx
+record User { Id: Int, Age: Int };
+let isAdult = fun (u: User) => u.Age >= 18;
+isAdult (User { Id: 1, Age: 25 })
+```
+
+```
+$ dotnet run --project src/Klexir.Cli -- run hello.klx
+true
+```
+
+A lex/parse/type error prints the file and a position, and the process exits non-zero — see [`editors/vscode/README.md`](editors/vscode/README.md) for installing the extension.
+
+---
+
 ## Quick example
 
 ```csharp
@@ -98,7 +122,8 @@ area (Rectangle 3 5)   // 15
 
 | Capability | API | Notes |
 |---|---|---|
-| Lexer | `Lexer.Tokenize()` | Identifiers/keywords, integers, operators, line/column tracking for diagnostics |
+| Lexer | `Lexer.Tokenize()` | Identifiers/keywords, integers, operators, `// line comments`, line/column tracking for diagnostics |
+| CLI | `dotnet run --project src/Klexir.Cli -- run file.klx` | Runs a `.klx` file end to end; non-zero exit and a `file:line:col` message on any lex/parse/type/runtime error |
 | Parser | `Parser.ParseExpression()` | Recursive-descent; precedence `let`/`if`/`fun` → comparison → `+ -` → `* /` → application → primary |
 | Programs | `Parser.ParseProgram()` | A sequence of top-level `let`/`let rec` declarations — each ending in `;`, no `in` needed — followed by a final expression; desugars to the exact same nested-`let` AST, so the checker/evaluator need no changes |
 | Records | `record Name { Field: Type, ... };`, `Name { Field: expr, ... }`, `expr.Field` | User-defined product types — top-level declarations only. Construction checks field names/types by name (order doesn't matter); `RecordType` is nominal (equal by name), so a function parameter's record type resolves against the enclosing `record` declaration |

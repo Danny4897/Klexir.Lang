@@ -36,4 +36,32 @@ public sealed class LexerTests
 
         result.IsFailure.Should().BeTrue();
     }
+
+    [Fact]
+    public void Tokenize_skips_a_line_comment_to_the_end_of_the_line()
+    {
+        var result = new Lexer("1 + 2 // this is ignored\n+ 3").Tokenize();
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Select(t => t.Type).Should().Equal(
+            TokenType.Int, TokenType.Plus, TokenType.Int, TokenType.Plus, TokenType.Int, TokenType.Eof);
+    }
+
+    [Fact]
+    public void Tokenize_allows_a_comment_on_its_own_line_with_nothing_after_it()
+    {
+        var result = new Lexer("// just a comment").Tokenize();
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Select(t => t.Type).Should().Equal(TokenType.Eof);
+    }
+
+    [Fact]
+    public void Tokenize_does_not_treat_a_single_slash_as_a_comment()
+    {
+        var result = new Lexer("6 / 2").Tokenize();
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Select(t => t.Type).Should().Equal(TokenType.Int, TokenType.Slash, TokenType.Int, TokenType.Eof);
+    }
 }

@@ -32,6 +32,17 @@ public sealed class Lexer(string source)
                 continue;
             }
 
+            if (c == '/' && i + 1 < source.Length && source[i + 1] == '/')
+            {
+                while (i < source.Length && source[i] != '\n')
+                {
+                    i++;
+                    column++;
+                }
+
+                continue;
+            }
+
             var startColumn = column;
 
             if (c == '"')

@@ -1,0 +1,64 @@
+{
+  "name": "klexir-lang",
+  "displayName": "Klexir Language Support",
+  "description": "Syntax highlighting and a Run command for Klexir (.klx) files.",
+  "version": "0.1.0",
+  "publisher": "danny4897",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Programming Languages"],
+  "activationEvents": ["onLanguage:klexir"],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "klexir",
+        "aliases": ["Klexir", "klexir"],
+        "extensions": [".klx"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "klexir",
+        "scopeName": "source.klexir",
+        "path": "./syntaxes/klexir.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "klexir.runFile",
+        "title": "Klexir: Run File",
+        "icon": "$(play)"
+      }
+    ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "klexir.runFile",
+          "when": "editorLangId == klexir",
+          "group": "navigation"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "klexir.runFile",
+        "key": "ctrl+f5",
+        "mac": "cmd+f5",
+        "when": "editorLangId == klexir"
+      }
+    ],
+    "configuration": {
+      "title": "Klexir",
+      "properties": {
+        "klexir.cliProjectPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to Klexir.Cli.csproj. Leave empty to auto-detect it inside the current workspace."
+        }
+      }
+    }
+  }
+}
