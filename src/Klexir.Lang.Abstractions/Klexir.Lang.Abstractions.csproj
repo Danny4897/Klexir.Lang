@@ -2,7 +2,14 @@
   <PropertyGroup>
     <AssemblyName>Klexir.Lang.Abstractions</AssemblyName>
     <PackageId>Klexir.Lang.Abstractions</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Danny4897</Authors>
     <Description>Public contracts for the Klexir language front end (source positions, diagnostics).</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/Danny4897/Klexir.Lang</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Danny4897/Klexir.Lang</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>klexir;programming-language;compiler</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
