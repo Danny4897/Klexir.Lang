@@ -3,11 +3,9 @@
 [![CI](https://github.com/Danny4897/Klexir.Lang/actions/workflows/ci.yml/badge.svg)](https://github.com/Danny4897/Klexir.Lang/actions/workflows/ci.yml)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/)
 
-The Klexir programming language — currently a **front end only**: a lexer, a recursive-descent parser, and a structural type checker. Built on [MonadicSharp](https://www.nuget.org/packages/MonadicSharp/) `Result<T>` — no exceptions for compiler-control flow, ever.
+The Klexir programming language: a lexer, a recursive-descent parser, a structural type checker, and a tree-walking evaluator — so a Klexir program written as a string can now be tokenized, parsed, type-checked, and actually **run** to a value. Built on [MonadicSharp](https://www.nuget.org/packages/MonadicSharp/) `Result<T>` — no exceptions for compiler-control flow, ever, evaluation included.
 
-> **⚠️ This cannot run programs yet.** There is no evaluator for the AST and no compiler emitting `Klexir.Runtime` bytecode. `Lexer` and `Parser` and `TypeChecker` will tell you whether a Klexir program is well-formed and well-typed — they will not execute it. See [Can I write something real in Klexir yet?](#can-i-write-something-real-in-klexir-yet) below.
-
-> **Status: private research repo, not published to NuGet.** Reference the project directly until/unless it's published.
+> **Status: private research repo, not published to NuGet.** No compiler to `Klexir.Runtime` bytecode yet — this evaluator interprets the typed AST directly. See [What can't Klexir do yet?](#what-cant-klexir-do-yet) below. Reference the project directly until/unless it's published.
 
 ---
 
@@ -19,11 +17,18 @@ var source = "let double = fun (x: Int) => x * 2 in if double 5 > 8 then double 
 Result<IReadOnlyList<Token>> tokens = new Lexer(source).Tokenize();
 Result<Expr> ast = new Parser(tokens.Value).ParseExpression();
 Result<TypedExpr> typed = new TypeChecker().Check(ast.Value);
+Result<KlexirValue> value = new Evaluator().Evaluate(typed.Value);
 
-typed.Value.Type; // KlexirType.Int
+value.Value; // IntValue(10)
 ```
 
-Every stage returns `Result<T>` — an unbound identifier, a type mismatch, a malformed `let`, applying a non-function: all come back as a failed `Result` with a message and source position, never a thrown exception.
+Every stage returns `Result<T>` — an unbound identifier, a type mismatch, a malformed `let`, applying a non-function, a division by zero: all come back as a failed `Result` with a message (and, through parsing, a source position), never a thrown exception.
+
+Closures capture their defining environment for real, so currying works:
+
+```csharp
+Run("let add = fun (x: Int) => fun (y: Int) => x + y in add 3 4"); // IntValue(7)
+```
 
 ---
 
@@ -36,6 +41,7 @@ Every stage returns `Result<T>` — an unbound identifier, a type mismatch, a ma
 | Types | `KlexirType` (`IntType`/`BoolType`/`FunctionType`) | A real type hierarchy, not a flat enum — functions have function types |
 | Type checker | `TypeChecker.Check(ast)` | Name resolution, arithmetic/comparison operand checks, `if`-branch unification, function application checks |
 | Closures | `FunExpr`, `AppExpr` | `fun (x: Int) => body`; application is left-associative juxtaposition (`f x y` = `(f x) y`), binds tighter than `* /` |
+| Evaluator | `Evaluator.Evaluate(typedExpr)` | Tree-walking; `IntValue`/`BoolValue`/`ClosureValue`; a closure carries its captured environment, so returning a closure from a closure (currying) works |
 
 ### Language sample
 
@@ -45,17 +51,15 @@ let isBig  = fun (x: Int) => x > 100 in
 if isBig (square 11) then square 11 else 0
 ```
 
-## Can I write something real in Klexir yet?
+## What can't Klexir do yet?
 
-**No — not as standalone Klexir code that runs on its own.** Three pieces are still missing:
+A Klexir *expression* runs end to end today (see the quick example above). What's still missing before it's a language you'd write a real program in:
 
-1. **An evaluator or a compiler backend.** `TypeChecker` produces a `TypedExpr` tree, but nothing walks it to produce a value, and nothing emits `Klexir.Runtime` bytecode from it (`Klexir.Runtime` has no local-variable or jump opcodes yet either — see that repo's README). Until one of those exists, a well-typed Klexir program can be checked but not run.
-2. **Real language features.** No strings, no collections, no records/ADTs, no pattern matching, no modules, no I/O. The language today is `let`, `if`, arithmetic, comparisons, booleans, and single-argument functions over `Int`/`Bool` — enough to prove the front-end pipeline, not enough to write a program that does something.
-3. **Interop with .NET/MonadicSharp.** Even once Klexir code can run, it has no way today to call into C# or use `Result<T>`/`Option<T>` itself — those ideas would need to be *modeled inside* the language (which is philosophically the point — "the language's own error handling is `Result`/`Option`-shaped," per the study plan — but that design doesn't exist yet).
+1. **A compiler to `Klexir.Runtime` bytecode.** The evaluator interprets the AST directly (tree-walking) — there's no IR, no codegen, no way to produce a standalone `.klx` bytecode file `Klexir.Runtime` can run without this repo present. (`Klexir.Runtime` also has no local-variable or jump opcodes yet, which a real codegen would need.)
+2. **Real language features.** No strings, no collections, no records/ADTs, no pattern matching, no modules, no I/O, no recursion (a `let`-bound name isn't visible inside its own value, so a function can't call itself by name yet). The language today is `let`, `if`, arithmetic, comparisons, booleans, and closures over `Int`/`Bool` — enough for real (if tiny) programs, not enough for anything with state, text, or recursion.
+3. **Interop with .NET/MonadicSharp.** Klexir code has no way to call into C# or use `Result<T>`/`Option<T>` itself — those ideas would need to be *modeled inside* the language (philosophically the point, per the study plan, but that design doesn't exist yet).
 
-**What you *can* do today** is use `Klexir.Lang` as a parser/checker library from C# — e.g. to validate that a string is well-formed Klexir — or keep building toward an evaluator as the next increment.
-
-**If the goal is "build a real solution using Result-oriented, railway-style code today,"** that's exactly what [MonadicSharp](https://www.nuget.org/packages/MonadicSharp/) already does, in C#, in production, right now — no interpreter required. Klexir.Lang becoming a usable language is a from-scratch compiler project (front end ✅ here → IR/codegen → an evaluator or a Runtime target with more opcodes → a standard library), realistically weeks of further work, not the next commit.
+**If the goal is "build a real solution using Result-oriented, railway-style code today,"** that's exactly what [MonadicSharp](https://www.nuget.org/packages/MonadicSharp/) already does, in C#, in production, right now. Klexir.Lang becoming a language you'd reach for is still a ways off (recursion + a couple of data types would make it genuinely useful for small programs; a real compiler backend is the bigger remaining project).
 
 ## Requirements
 
