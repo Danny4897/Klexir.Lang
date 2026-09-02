@@ -34,6 +34,7 @@ public enum TokenType
     RBracket,
     Comma,
     Pipe,
+    Semicolon,
     Match,
     With,
     Some,

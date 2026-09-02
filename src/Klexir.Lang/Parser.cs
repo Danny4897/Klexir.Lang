@@ -44,91 +44,10 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
 
     private Result<Expr> ParseLetRec()
     {
-        _position++; // 'let'
-        _position++; // 'rec'
-
-        if (Current.Type != TokenType.Identifier)
+        var header = ParseLetRecHeader();
+        if (header.IsFailure)
         {
-            return Result<Expr>.Failure(Error.Create($"Expected a function name after 'let rec' at {Current.Position}."));
-        }
-
-        var name = Current.Text;
-        _position++;
-
-        if (Current.Type != TokenType.Equals)
-        {
-            return Result<Expr>.Failure(Error.Create($"Expected '=' after 'let rec {name}' at {Current.Position}."));
-        }
-
-        _position++;
-
-        if (Current.Type != TokenType.Fun)
-        {
-            return Result<Expr>.Failure(Error.Create($"'let rec' requires a function value at {Current.Position}."));
-        }
-
-        _position++; // 'fun'
-
-        if (Current.Type != TokenType.LParen)
-        {
-            return Result<Expr>.Failure(Error.Create($"Expected '(' after 'fun' at {Current.Position}."));
-        }
-
-        _position++;
-
-        if (Current.Type != TokenType.Identifier)
-        {
-            return Result<Expr>.Failure(Error.Create($"Expected a parameter name at {Current.Position}."));
-        }
-
-        var paramName = Current.Text;
-        _position++;
-
-        if (Current.Type != TokenType.Colon)
-        {
-            return Result<Expr>.Failure(Error.Create($"Expected ':' after parameter name at {Current.Position}."));
-        }
-
-        _position++;
-
-        var paramType = ParseTypeAnnotation();
-        if (paramType.IsFailure)
-        {
-            return Result<Expr>.Failure(paramType.Error);
-        }
-
-        if (Current.Type != TokenType.RParen)
-        {
-            return Result<Expr>.Failure(Error.Create($"Expected ')' at {Current.Position}."));
-        }
-
-        _position++;
-
-        if (Current.Type != TokenType.Colon)
-        {
-            return Result<Expr>.Failure(Error.Create(
-                $"'let rec' functions need an explicit return type — ': Type' after the parameter list — at {Current.Position}."));
-        }
-
-        _position++;
-
-        var returnType = ParseTypeAnnotation();
-        if (returnType.IsFailure)
-        {
-            return Result<Expr>.Failure(returnType.Error);
-        }
-
-        if (Current.Type != TokenType.FatArrow)
-        {
-            return Result<Expr>.Failure(Error.Create($"Expected '=>' at {Current.Position}."));
-        }
-
-        _position++;
-
-        var functionBody = ParseTop();
-        if (functionBody.IsFailure)
-        {
-            return functionBody;
+            return Result<Expr>.Failure(header.Error);
         }
 
         if (Current.Type != TokenType.In)
@@ -141,7 +60,110 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
         var letBody = ParseTop();
         return letBody.IsFailure
             ? letBody
-            : Result<Expr>.Success(new LetRecExpr(name, paramName, paramType.Value, returnType.Value, functionBody.Value, letBody.Value));
+            : Result<Expr>.Success(new LetRecExpr(
+                header.Value.Name, header.Value.ParamName, header.Value.ParamType, header.Value.ReturnType,
+                header.Value.FunctionBody, letBody.Value));
+    }
+
+    /// <summary>Parses <c>let rec name = fun (param: ParamType): ReturnType => functionBody</c>, up to but not
+    /// including <c>in</c> — shared by the in-expression <c>let rec ... in ...</c> form and top-level program
+    /// declarations, which don't use <c>in</c> at all.</summary>
+    private Result<(string Name, string ParamName, KlexirType ParamType, KlexirType ReturnType, Expr FunctionBody)> ParseLetRecHeader()
+    {
+        _position++; // 'let'
+        _position++; // 'rec'
+
+        if (Current.Type != TokenType.Identifier)
+        {
+            return Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(
+                Error.Create($"Expected a function name after 'let rec' at {Current.Position}."));
+        }
+
+        var name = Current.Text;
+        _position++;
+
+        if (Current.Type != TokenType.Equals)
+        {
+            return Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(
+                Error.Create($"Expected '=' after 'let rec {name}' at {Current.Position}."));
+        }
+
+        _position++;
+
+        if (Current.Type != TokenType.Fun)
+        {
+            return Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(
+                Error.Create($"'let rec' requires a function value at {Current.Position}."));
+        }
+
+        _position++; // 'fun'
+
+        if (Current.Type != TokenType.LParen)
+        {
+            return Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(
+                Error.Create($"Expected '(' after 'fun' at {Current.Position}."));
+        }
+
+        _position++;
+
+        if (Current.Type != TokenType.Identifier)
+        {
+            return Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(
+                Error.Create($"Expected a parameter name at {Current.Position}."));
+        }
+
+        var paramName = Current.Text;
+        _position++;
+
+        if (Current.Type != TokenType.Colon)
+        {
+            return Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(
+                Error.Create($"Expected ':' after parameter name at {Current.Position}."));
+        }
+
+        _position++;
+
+        var paramType = ParseTypeAnnotation();
+        if (paramType.IsFailure)
+        {
+            return Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(paramType.Error);
+        }
+
+        if (Current.Type != TokenType.RParen)
+        {
+            return Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(
+                Error.Create($"Expected ')' at {Current.Position}."));
+        }
+
+        _position++;
+
+        if (Current.Type != TokenType.Colon)
+        {
+            return Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(Error.Create(
+                $"'let rec' functions need an explicit return type — ': Type' after the parameter list — at {Current.Position}."));
+        }
+
+        _position++;
+
+        var returnType = ParseTypeAnnotation();
+        if (returnType.IsFailure)
+        {
+            return Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(returnType.Error);
+        }
+
+        if (Current.Type != TokenType.FatArrow)
+        {
+            return Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(
+                Error.Create($"Expected '=>' at {Current.Position}."));
+        }
+
+        _position++;
+
+        var functionBody = ParseTop();
+        return functionBody.IsFailure
+            ? Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(functionBody.Error)
+            : Result<(string, string, KlexirType, KlexirType, Expr)>.Success(
+                (name, paramName, paramType.Value, returnType.Value, functionBody.Value));
     }
 
     private Result<Expr> ParseFun()
@@ -653,27 +675,10 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
 
     private Result<Expr> ParseLet()
     {
-        _position++; // 'let'
-
-        if (Current.Type != TokenType.Identifier)
+        var header = ParseLetHeader();
+        if (header.IsFailure)
         {
-            return Result<Expr>.Failure(Error.Create($"Expected an identifier after 'let' at {Current.Position}."));
-        }
-
-        var name = Current.Text;
-        _position++;
-
-        if (Current.Type != TokenType.Equals)
-        {
-            return Result<Expr>.Failure(Error.Create($"Expected '=' after 'let {name}' at {Current.Position}."));
-        }
-
-        _position++;
-
-        var value = ParseTop();
-        if (value.IsFailure)
-        {
-            return value;
+            return Result<Expr>.Failure(header.Error);
         }
 
         if (Current.Type != TokenType.In)
@@ -684,7 +689,104 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
         _position++;
 
         var body = ParseTop();
-        return body.IsFailure ? body : Result<Expr>.Success(new LetExpr(name, value.Value, body.Value));
+        return body.IsFailure
+            ? body
+            : Result<Expr>.Success(new LetExpr(header.Value.Name, header.Value.Value, body.Value));
+    }
+
+    /// <summary>Parses <c>let name = value</c>, up to but not including <c>in</c> — shared by the in-expression
+    /// <c>let ... in ...</c> form and top-level program declarations, which don't use <c>in</c> at all.</summary>
+    private Result<(string Name, Expr Value)> ParseLetHeader()
+    {
+        _position++; // 'let'
+
+        if (Current.Type != TokenType.Identifier)
+        {
+            return Result<(string, Expr)>.Failure(Error.Create($"Expected an identifier after 'let' at {Current.Position}."));
+        }
+
+        var name = Current.Text;
+        _position++;
+
+        if (Current.Type != TokenType.Equals)
+        {
+            return Result<(string, Expr)>.Failure(Error.Create($"Expected '=' after 'let {name}' at {Current.Position}."));
+        }
+
+        _position++;
+
+        var value = ParseTop();
+        return value.IsFailure
+            ? Result<(string, Expr)>.Failure(value.Error)
+            : Result<(string, Expr)>.Success((name, value.Value));
+    }
+
+    /// <summary>
+    /// A Klexir program: a sequence of top-level <c>let</c>/<c>let rec</c> declarations — no trailing <c>in</c>
+    /// between them — followed by a final expression, desugared into the same nested-<c>let</c> AST a single
+    /// <c>let ... in ...</c> expression produces.
+    /// </summary>
+    public Result<Expr> ParseProgram()
+    {
+        var body = ParseProgramBody();
+        if (body.IsFailure)
+        {
+            return body;
+        }
+
+        return Current.Type == TokenType.Eof
+            ? body
+            : Result<Expr>.Failure(Error.Create($"Unexpected token '{Current.Text}' at {Current.Position}."));
+    }
+
+    private Result<Expr> ParseProgramBody()
+    {
+        if (Current.Type == TokenType.Let && Peek(1).Type == TokenType.Rec)
+        {
+            var header = ParseLetRecHeader();
+            if (header.IsFailure)
+            {
+                return Result<Expr>.Failure(header.Error);
+            }
+
+            // A ';' terminator is required here — without it, a value like '... fun (n: Int) => n' directly
+            // followed by the next declaration's leading identifier is grammatically indistinguishable from
+            // that value being *applied* to it (Klexir's function calls are juxtaposition: 'f x').
+            var semicolon = Expect(TokenType.Semicolon, "';' after a top-level 'let rec' declaration");
+            if (semicolon.IsFailure)
+            {
+                return Result<Expr>.Failure(semicolon.Error);
+            }
+
+            var rest = ParseProgramBody();
+            return rest.IsFailure
+                ? rest
+                : Result<Expr>.Success(new LetRecExpr(
+                    header.Value.Name, header.Value.ParamName, header.Value.ParamType, header.Value.ReturnType,
+                    header.Value.FunctionBody, rest.Value));
+        }
+
+        if (Current.Type == TokenType.Let)
+        {
+            var header = ParseLetHeader();
+            if (header.IsFailure)
+            {
+                return Result<Expr>.Failure(header.Error);
+            }
+
+            var semicolon = Expect(TokenType.Semicolon, "';' after a top-level 'let' declaration");
+            if (semicolon.IsFailure)
+            {
+                return Result<Expr>.Failure(semicolon.Error);
+            }
+
+            var rest = ParseProgramBody();
+            return rest.IsFailure
+                ? rest
+                : Result<Expr>.Success(new LetExpr(header.Value.Name, header.Value.Value, rest.Value));
+        }
+
+        return ParseTop();
     }
 
     private Result<Expr> ParseIf()

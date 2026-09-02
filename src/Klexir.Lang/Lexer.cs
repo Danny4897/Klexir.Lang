@@ -134,6 +134,7 @@ public sealed class Lexer(string source)
                 ':' => TokenType.Colon,
                 ',' => TokenType.Comma,
                 '|' => TokenType.Pipe,
+                ';' => TokenType.Semicolon,
                 _ => (TokenType?)null,
             };
 

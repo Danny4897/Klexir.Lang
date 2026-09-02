@@ -64,6 +64,18 @@ Result<long> bridged = KlexirInterop.ToResult(klexirValue, KlexirInterop.AsInt, 
 bridged.Value; // 25 — a real MonadicSharp Result<long>, not a KlexirValue tree
 ```
 
+A program is a sequence of top-level declarations (`;`-terminated, no `in`) plus a final expression — closer to what an actual `.klx` source file would look like than one giant `let ... in`:
+
+```csharp
+Result<Expr> ast = new Parser(tokens.Value).ParseProgram();
+```
+
+```
+let square = fun (x: Int) => x * x;
+let cube = fun (x: Int) => x * square x;
+cube 3   // 27
+```
+
 ---
 
 ## What's in the box
@@ -72,6 +84,7 @@ bridged.Value; // 25 — a real MonadicSharp Result<long>, not a KlexirValue tre
 |---|---|---|
 | Lexer | `Lexer.Tokenize()` | Identifiers/keywords, integers, operators, line/column tracking for diagnostics |
 | Parser | `Parser.ParseExpression()` | Recursive-descent; precedence `let`/`if`/`fun` → comparison → `+ -` → `* /` → application → primary |
+| Programs | `Parser.ParseProgram()` | A sequence of top-level `let`/`let rec` declarations — each ending in `;`, no `in` needed — followed by a final expression; desugars to the exact same nested-`let` AST, so the checker/evaluator need no changes |
 | Types | `KlexirType` (`IntType`/`BoolType`/`FunctionType`) | A real type hierarchy, not a flat enum — functions have function types |
 | Type checker | `TypeChecker.Check(ast)` | Name resolution, arithmetic/comparison operand checks, `if`-branch unification, function application checks |
 | Closures | `FunExpr`, `AppExpr` | `fun (x: Int) => body`; application is left-associative juxtaposition (`f x y` = `(f x) y`), binds tighter than `* /` |
