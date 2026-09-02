@@ -36,3 +36,12 @@ public sealed record IfExpr(Expr Condition, Expr Then, Expr Else) : Expr;
 public sealed record FunExpr(string ParamName, KlexirType ParamType, Expr Body) : Expr;
 
 public sealed record AppExpr(Expr Function, Expr Argument) : Expr;
+
+/// <summary>
+/// <c>let rec name = fun (param: ParamType): ReturnType => functionBody in letBody</c>. Unlike <see cref="LetExpr"/>,
+/// <c>name</c> is visible inside <c>functionBody</c> too, so the function can call itself. A recursive binding's
+/// return type must be written explicitly (no inference), since checking the body needs the binding's type
+/// before the body itself has been checked.
+/// </summary>
+public sealed record LetRecExpr(
+    string Name, string ParamName, KlexirType ParamType, KlexirType ReturnType, Expr FunctionBody, Expr LetBody) : Expr;

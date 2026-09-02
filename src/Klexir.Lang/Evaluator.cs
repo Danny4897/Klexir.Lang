@@ -48,8 +48,24 @@ public sealed class Evaluator
                         .Bind(argument => Evaluate(closure.Body, WithBinding(closure.Environment, closure.ParamName, argument)))
                     : Result<KlexirValue>.Failure(Error.Create("Attempted to apply a non-function value."))),
 
+            TypedLetRecExpr letRec => EvaluateLetRec(letRec, environment),
+
             _ => Result<KlexirValue>.Failure(Error.Create($"Unsupported typed node '{expr.GetType().Name}'.")),
         };
+
+    /// <summary>
+    /// Ties the knot: builds the closure's captured environment as a mutable dictionary, then adds the closure's
+    /// own name to that same dictionary after the closure exists — so when the closure is later called, its
+    /// captured environment already contains itself, and it can recurse.
+    /// </summary>
+    private static Result<KlexirValue> EvaluateLetRec(TypedLetRecExpr letRec, IReadOnlyDictionary<string, KlexirValue> environment)
+    {
+        var recursiveEnvironment = new Dictionary<string, KlexirValue>(environment);
+        var closure = new ClosureValue(letRec.ParamName, letRec.FunctionBody, recursiveEnvironment);
+        recursiveEnvironment[letRec.Name] = closure;
+
+        return Evaluate(letRec.LetBody, WithBinding(environment, letRec.Name, closure));
+    }
 
     private static Result<KlexirValue> ApplyBinary(BinaryOperator op, KlexirValue left, KlexirValue right)
     {

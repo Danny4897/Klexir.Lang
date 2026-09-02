@@ -28,11 +28,116 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
     private Result<Expr> ParseTop() =>
         Current.Type switch
         {
+            TokenType.Let when Peek(1).Type == TokenType.Rec => ParseLetRec(),
             TokenType.Let => ParseLet(),
             TokenType.If => ParseIf(),
             TokenType.Fun => ParseFun(),
             _ => ParseComparison(),
         };
+
+    private Token Peek(int offset) => tokens[Math.Min(_position + offset, tokens.Count - 1)];
+
+    private Result<Expr> ParseLetRec()
+    {
+        _position++; // 'let'
+        _position++; // 'rec'
+
+        if (Current.Type != TokenType.Identifier)
+        {
+            return Result<Expr>.Failure(Error.Create($"Expected a function name after 'let rec' at {Current.Position}."));
+        }
+
+        var name = Current.Text;
+        _position++;
+
+        if (Current.Type != TokenType.Equals)
+        {
+            return Result<Expr>.Failure(Error.Create($"Expected '=' after 'let rec {name}' at {Current.Position}."));
+        }
+
+        _position++;
+
+        if (Current.Type != TokenType.Fun)
+        {
+            return Result<Expr>.Failure(Error.Create($"'let rec' requires a function value at {Current.Position}."));
+        }
+
+        _position++; // 'fun'
+
+        if (Current.Type != TokenType.LParen)
+        {
+            return Result<Expr>.Failure(Error.Create($"Expected '(' after 'fun' at {Current.Position}."));
+        }
+
+        _position++;
+
+        if (Current.Type != TokenType.Identifier)
+        {
+            return Result<Expr>.Failure(Error.Create($"Expected a parameter name at {Current.Position}."));
+        }
+
+        var paramName = Current.Text;
+        _position++;
+
+        if (Current.Type != TokenType.Colon)
+        {
+            return Result<Expr>.Failure(Error.Create($"Expected ':' after parameter name at {Current.Position}."));
+        }
+
+        _position++;
+
+        var paramType = ParseTypeAnnotation();
+        if (paramType.IsFailure)
+        {
+            return Result<Expr>.Failure(paramType.Error);
+        }
+
+        if (Current.Type != TokenType.RParen)
+        {
+            return Result<Expr>.Failure(Error.Create($"Expected ')' at {Current.Position}."));
+        }
+
+        _position++;
+
+        if (Current.Type != TokenType.Colon)
+        {
+            return Result<Expr>.Failure(Error.Create(
+                $"'let rec' functions need an explicit return type — ': Type' after the parameter list — at {Current.Position}."));
+        }
+
+        _position++;
+
+        var returnType = ParseTypeAnnotation();
+        if (returnType.IsFailure)
+        {
+            return Result<Expr>.Failure(returnType.Error);
+        }
+
+        if (Current.Type != TokenType.FatArrow)
+        {
+            return Result<Expr>.Failure(Error.Create($"Expected '=>' at {Current.Position}."));
+        }
+
+        _position++;
+
+        var functionBody = ParseTop();
+        if (functionBody.IsFailure)
+        {
+            return functionBody;
+        }
+
+        if (Current.Type != TokenType.In)
+        {
+            return Result<Expr>.Failure(Error.Create($"Expected 'in' at {Current.Position}."));
+        }
+
+        _position++;
+
+        var letBody = ParseTop();
+        return letBody.IsFailure
+            ? letBody
+            : Result<Expr>.Success(new LetRecExpr(name, paramName, paramType.Value, returnType.Value, functionBody.Value, letBody.Value));
+    }
 
     private Result<Expr> ParseFun()
     {

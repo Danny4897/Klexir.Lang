@@ -7,6 +7,7 @@ public enum TokenType
     Int,
     Identifier,
     Let,
+    Rec,
     In,
     If,
     Then,

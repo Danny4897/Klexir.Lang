@@ -60,6 +60,7 @@ public sealed class Lexer(string source)
                 var type = text switch
                 {
                     "let" => TokenType.Let,
+                    "rec" => TokenType.Rec,
                     "in" => TokenType.In,
                     "if" => TokenType.If,
                     "then" => TokenType.Then,

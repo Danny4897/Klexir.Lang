@@ -42,3 +42,6 @@ public sealed record TypedIfExpr(TypedExpr Condition, TypedExpr Then, TypedExpr 
 public sealed record TypedFunExpr(string ParamName, KlexirType ParamType, TypedExpr Body, KlexirType Type) : TypedExpr(Type);
 
 public sealed record TypedAppExpr(TypedExpr Function, TypedExpr Argument, KlexirType Type) : TypedExpr(Type);
+
+public sealed record TypedLetRecExpr(
+    string Name, string ParamName, KlexirType ParamType, TypedExpr FunctionBody, KlexirType FunctionType, TypedExpr LetBody, KlexirType Type) : TypedExpr(Type);

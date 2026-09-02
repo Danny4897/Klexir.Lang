@@ -59,8 +59,37 @@ public sealed class TypeChecker
                                 $"Function expects {functionType.Parameter} but got {argument.Type}.")))
                     : Result<TypedExpr>.Failure(Error.Create($"Cannot apply a non-function value of type {function.Type}."))),
 
+            LetRecExpr letRec => CheckLetRec(letRec, environment),
+
             _ => Result<TypedExpr>.Failure(Error.Create($"Unsupported expression node '{expr.GetType().Name}'.")),
         };
+
+    private static Result<TypedExpr> CheckLetRec(LetRecExpr letRec, IReadOnlyDictionary<string, KlexirType> environment)
+    {
+        var functionType = new FunctionType(letRec.ParamType, letRec.ReturnType);
+        var bodyEnvironment = WithBinding(WithBinding(environment, letRec.Name, functionType), letRec.ParamName, letRec.ParamType);
+
+        var bodyResult = Check(letRec.FunctionBody, bodyEnvironment);
+        if (bodyResult.IsFailure)
+        {
+            return bodyResult;
+        }
+
+        if (bodyResult.Value.Type != letRec.ReturnType)
+        {
+            return Result<TypedExpr>.Failure(Error.Create(
+                $"'{letRec.Name}' declared to return {letRec.ReturnType} but its body is {bodyResult.Value.Type}."));
+        }
+
+        var letBodyResult = Check(letRec.LetBody, WithBinding(environment, letRec.Name, functionType));
+        if (letBodyResult.IsFailure)
+        {
+            return letBodyResult;
+        }
+
+        return Result<TypedExpr>.Success(new TypedLetRecExpr(
+            letRec.Name, letRec.ParamName, letRec.ParamType, bodyResult.Value, functionType, letBodyResult.Value, letBodyResult.Value.Type));
+    }
 
     private static IReadOnlyDictionary<string, KlexirType> WithBinding(
         IReadOnlyDictionary<string, KlexirType> environment, string name, KlexirType type) =>

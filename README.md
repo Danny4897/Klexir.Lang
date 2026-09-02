@@ -30,6 +30,16 @@ Closures capture their defining environment for real, so currying works:
 Run("let add = fun (x: Int) => fun (y: Int) => x + y in add 3 4"); // IntValue(7)
 ```
 
+`let rec` gives a function access to its own name, so it can call itself — a plain `let` still can't:
+
+```csharp
+Run("""
+    let rec fact = fun (n: Int): Int =>
+        if n < 2 then 1 else n * fact (n - 1)
+    in fact 5
+    """); // IntValue(120)
+```
+
 ---
 
 ## What's in the box
@@ -42,6 +52,7 @@ Run("let add = fun (x: Int) => fun (y: Int) => x + y in add 3 4"); // IntValue(7
 | Type checker | `TypeChecker.Check(ast)` | Name resolution, arithmetic/comparison operand checks, `if`-branch unification, function application checks |
 | Closures | `FunExpr`, `AppExpr` | `fun (x: Int) => body`; application is left-associative juxtaposition (`f x y` = `(f x) y`), binds tighter than `* /` |
 | Evaluator | `Evaluator.Evaluate(typedExpr)` | Tree-walking; `IntValue`/`BoolValue`/`ClosureValue`; a closure carries its captured environment, so returning a closure from a closure (currying) works |
+| Recursion | `let rec name = fun (p: T): R => body in ...` | The function's own name is visible inside its body (a plain `let` still isn't); return type must be written explicitly — no inference |
 
 ### Language sample
 
@@ -56,7 +67,7 @@ if isBig (square 11) then square 11 else 0
 A Klexir *expression* runs end to end today (see the quick example above). What's still missing before it's a language you'd write a real program in:
 
 1. **A compiler to `Klexir.Runtime` bytecode.** The evaluator interprets the AST directly (tree-walking) — there's no IR, no codegen, no way to produce a standalone `.klx` bytecode file `Klexir.Runtime` can run without this repo present. (`Klexir.Runtime` also has no local-variable or jump opcodes yet, which a real codegen would need.)
-2. **Real language features.** No strings, no collections, no records/ADTs, no pattern matching, no modules, no I/O, no recursion (a `let`-bound name isn't visible inside its own value, so a function can't call itself by name yet). The language today is `let`, `if`, arithmetic, comparisons, booleans, and closures over `Int`/`Bool` — enough for real (if tiny) programs, not enough for anything with state, text, or recursion.
+2. **Real language features.** No strings, no collections, no records/ADTs, no pattern matching, no modules, no I/O. The language today is `let`/`let rec`, `if`, arithmetic, comparisons, booleans, and closures over `Int`/`Bool` — enough for real (if tiny) programs including recursive ones, not enough for anything with state or text.
 3. **Interop with .NET/MonadicSharp.** Klexir code has no way to call into C# or use `Result<T>`/`Option<T>` itself — those ideas would need to be *modeled inside* the language (philosophically the point, per the study plan, but that design doesn't exist yet).
 
 **If the goal is "build a real solution using Result-oriented, railway-style code today,"** that's exactly what [MonadicSharp](https://www.nuget.org/packages/MonadicSharp/) already does, in C#, in production, right now. Klexir.Lang becoming a language you'd reach for is still a ways off (recursion + a couple of data types would make it genuinely useful for small programs; a real compiler backend is the bigger remaining project).
