@@ -14,4 +14,6 @@ var ast = new Parser(tokens.Value).ParseExpression();
 
 `Tokenize()`/`ParseExpression()` return `Result<T>` — an unexpected character, a dangling operator, a malformed `let`, or a trailing token after a complete expression all fail the result. Precedence: `let ... in` loosest, then `+ -`, then `* /`, then primary (literals, identifiers, parenthesized expressions).
 
-Type checking, pattern matching/ADTs, closures/modules, and the IR/bytecode emitter targeting `Klexir.Runtime` follow in later increments.
+`TypeChecker.Check(ast)` walks the AST into a `TypedExpr` tree (`TypedIntLiteral`/`TypedIdentifier`/`TypedBinaryExpr`/`TypedLetExpr`), threading a `let`-scoped environment. The language has exactly one type today (`KlexirType.Int`), so the meaningful check right now is that every identifier is bound before use — and that a `let`'s binding never leaks outside its own body. Real type mismatches become checkable once the language grows a second type.
+
+Pattern matching/ADTs, closures/modules, and the IR/bytecode emitter targeting `Klexir.Runtime` follow in later increments.
