@@ -45,3 +45,33 @@ public sealed record AppExpr(Expr Function, Expr Argument) : Expr;
 /// </summary>
 public sealed record LetRecExpr(
     string Name, string ParamName, KlexirType ParamType, KlexirType ReturnType, Expr FunctionBody, Expr LetBody) : Expr;
+
+/// <summary><c>Some(value)</c>. Its <c>Option&lt;T&gt;</c> element type is inferred from <c>value</c>.</summary>
+public sealed record SomeExpr(Expr Value) : Expr;
+
+/// <summary><c>None&lt;ElementType&gt;</c>. Carries no value, so its element type must be written explicitly.</summary>
+public sealed record NoneExpr(KlexirType ElementType) : Expr;
+
+/// <summary><c>Ok&lt;ErrType&gt;(value)</c>. The Ok type is inferred from <c>value</c>; the Err type can't be, so it's explicit.</summary>
+public sealed record OkExpr(KlexirType ErrType, Expr Value) : Expr;
+
+/// <summary><c>Err&lt;OkType&gt;(value)</c>. The Err type is inferred from <c>value</c>; the Ok type can't be, so it's explicit.</summary>
+public sealed record ErrExpr(KlexirType OkType, Expr Value) : Expr;
+
+/// <summary><c>match scrutinee with Some(binder) => someBody | None => noneBody</c>.</summary>
+public sealed record MatchOptionExpr(Expr Scrutinee, string SomeBinder, Expr SomeBody, Expr NoneBody) : Expr;
+
+/// <summary><c>match scrutinee with Ok(okBinder) => okBody | Err(errBinder) => errBody</c>.</summary>
+public sealed record MatchResultExpr(Expr Scrutinee, string OkBinder, Expr OkBody, string ErrBinder, Expr ErrBody) : Expr;
+
+/// <summary>
+/// <c>map(container, mapper)</c> — the Functor operation. Transforms the value inside an <c>Option</c>/<c>Ok</c>
+/// container and leaves <c>None</c>/<c>Err</c> untouched.
+/// </summary>
+public sealed record MapExpr(Expr Container, Expr Mapper) : Expr;
+
+/// <summary>
+/// <c>bind(container, mapper)</c> — the Monad operation. Chains a container-returning function and short-circuits
+/// on <c>None</c>/<c>Err</c>, enabling railway-oriented composition.
+/// </summary>
+public sealed record BindExpr(Expr Container, Expr Mapper) : Expr;

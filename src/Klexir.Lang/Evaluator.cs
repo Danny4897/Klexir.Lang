@@ -43,14 +43,74 @@ public sealed class Evaluator
             TypedFunExpr fun => Result<KlexirValue>.Success(new ClosureValue(fun.ParamName, fun.Body, environment)),
 
             TypedAppExpr app => Evaluate(app.Function, environment)
-                .Bind(function => function is ClosureValue closure
-                    ? Evaluate(app.Argument, environment)
-                        .Bind(argument => Evaluate(closure.Body, WithBinding(closure.Environment, closure.ParamName, argument)))
-                    : Result<KlexirValue>.Failure(Error.Create("Attempted to apply a non-function value."))),
+                .Bind(function => Evaluate(app.Argument, environment)
+                    .Bind(argument => ApplyClosure(function, argument))),
 
             TypedLetRecExpr letRec => EvaluateLetRec(letRec, environment),
 
+            TypedSomeExpr some => Evaluate(some.Value, environment)
+                .Bind(value => Result<KlexirValue>.Success(new SomeValue(value))),
+
+            TypedNoneExpr => Result<KlexirValue>.Success(new NoneValue()),
+
+            TypedOkExpr ok => Evaluate(ok.Value, environment)
+                .Bind(value => Result<KlexirValue>.Success(new OkValue(value))),
+
+            TypedErrExpr err => Evaluate(err.Value, environment)
+                .Bind(value => Result<KlexirValue>.Success(new ErrValue(value))),
+
+            TypedMatchOptionExpr match => Evaluate(match.Scrutinee, environment)
+                .Bind(scrutinee => scrutinee switch
+                {
+                    SomeValue some => Evaluate(match.SomeBody, WithBinding(environment, match.SomeBinder, some.Value)),
+                    NoneValue => Evaluate(match.NoneBody, environment),
+                    _ => Result<KlexirValue>.Failure(Error.Create("Match scrutinee did not evaluate to an Option value.")),
+                }),
+
+            TypedMatchResultExpr match => Evaluate(match.Scrutinee, environment)
+                .Bind(scrutinee => scrutinee switch
+                {
+                    OkValue ok => Evaluate(match.OkBody, WithBinding(environment, match.OkBinder, ok.Value)),
+                    ErrValue err => Evaluate(match.ErrBody, WithBinding(environment, match.ErrBinder, err.Value)),
+                    _ => Result<KlexirValue>.Failure(Error.Create("Match scrutinee did not evaluate to a Result value.")),
+                }),
+
+            TypedMapExpr map => Evaluate(map.Container, environment)
+                .Bind(container => Evaluate(map.Mapper, environment)
+                    .Bind(mapper => ApplyMap(container, mapper))),
+
+            TypedBindExpr bind => Evaluate(bind.Container, environment)
+                .Bind(container => Evaluate(bind.Mapper, environment)
+                    .Bind(mapper => ApplyBind(container, mapper))),
+
             _ => Result<KlexirValue>.Failure(Error.Create($"Unsupported typed node '{expr.GetType().Name}'.")),
+        };
+
+    private static Result<KlexirValue> ApplyClosure(KlexirValue function, KlexirValue argument) =>
+        function is ClosureValue closure
+            ? Evaluate(closure.Body, WithBinding(closure.Environment, closure.ParamName, argument))
+            : Result<KlexirValue>.Failure(Error.Create("Attempted to apply a non-function value."));
+
+    /// <summary>The Functor operation: transforms the value inside Some/Ok, leaves None/Err untouched.</summary>
+    private static Result<KlexirValue> ApplyMap(KlexirValue container, KlexirValue mapper) =>
+        container switch
+        {
+            SomeValue some => ApplyClosure(mapper, some.Value).Bind(value => Result<KlexirValue>.Success(new SomeValue(value))),
+            NoneValue => Result<KlexirValue>.Success(container),
+            OkValue ok => ApplyClosure(mapper, ok.Value).Bind(value => Result<KlexirValue>.Success(new OkValue(value))),
+            ErrValue => Result<KlexirValue>.Success(container),
+            _ => Result<KlexirValue>.Failure(Error.Create("'map' requires an Option or Result value.")),
+        };
+
+    /// <summary>The Monad operation: chains a container-returning function, short-circuiting on None/Err.</summary>
+    private static Result<KlexirValue> ApplyBind(KlexirValue container, KlexirValue mapper) =>
+        container switch
+        {
+            SomeValue some => ApplyClosure(mapper, some.Value),
+            NoneValue => Result<KlexirValue>.Success(container),
+            OkValue ok => ApplyClosure(mapper, ok.Value),
+            ErrValue => Result<KlexirValue>.Success(container),
+            _ => Result<KlexirValue>.Failure(Error.Create("'bind' requires an Option or Result value.")),
         };
 
     /// <summary>

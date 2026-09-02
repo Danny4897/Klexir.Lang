@@ -68,6 +68,14 @@ public sealed class Lexer(string source)
                     "true" => TokenType.True,
                     "false" => TokenType.False,
                     "fun" => TokenType.Fun,
+                    "match" => TokenType.Match,
+                    "with" => TokenType.With,
+                    "Some" => TokenType.Some,
+                    "None" => TokenType.None,
+                    "Ok" => TokenType.Ok,
+                    "Err" => TokenType.Err,
+                    "map" => TokenType.Map,
+                    "bind" => TokenType.Bind,
                     _ => TokenType.Identifier,
                 };
                 tokens.Add(new Token(type, text, new SourcePosition(line, startColumn)));
@@ -108,6 +116,8 @@ public sealed class Lexer(string source)
                 '(' => TokenType.LParen,
                 ')' => TokenType.RParen,
                 ':' => TokenType.Colon,
+                ',' => TokenType.Comma,
+                '|' => TokenType.Pipe,
                 _ => (TokenType?)null,
             };
 

@@ -23,6 +23,16 @@ public sealed record FunctionType(KlexirType Parameter, KlexirType Return) : Kle
     public override string ToString() => $"{Parameter} -> {Return}";
 }
 
+public sealed record OptionType(KlexirType Element) : KlexirType
+{
+    public override string ToString() => $"Option<{Element}>";
+}
+
+public sealed record ResultType(KlexirType Ok, KlexirType Err) : KlexirType
+{
+    public override string ToString() => $"Result<{Ok}, {Err}>";
+}
+
 public abstract record TypedExpr(KlexirType Type);
 
 public sealed record TypedIntLiteral(long Value) : TypedExpr(KlexirType.Int);
@@ -45,3 +55,21 @@ public sealed record TypedAppExpr(TypedExpr Function, TypedExpr Argument, Klexir
 
 public sealed record TypedLetRecExpr(
     string Name, string ParamName, KlexirType ParamType, TypedExpr FunctionBody, KlexirType FunctionType, TypedExpr LetBody, KlexirType Type) : TypedExpr(Type);
+
+public sealed record TypedSomeExpr(TypedExpr Value, KlexirType Type) : TypedExpr(Type);
+
+public sealed record TypedNoneExpr(KlexirType Type) : TypedExpr(Type);
+
+public sealed record TypedOkExpr(TypedExpr Value, KlexirType Type) : TypedExpr(Type);
+
+public sealed record TypedErrExpr(TypedExpr Value, KlexirType Type) : TypedExpr(Type);
+
+public sealed record TypedMatchOptionExpr(
+    TypedExpr Scrutinee, string SomeBinder, TypedExpr SomeBody, TypedExpr NoneBody, KlexirType Type) : TypedExpr(Type);
+
+public sealed record TypedMatchResultExpr(
+    TypedExpr Scrutinee, string OkBinder, TypedExpr OkBody, string ErrBinder, TypedExpr ErrBody, KlexirType Type) : TypedExpr(Type);
+
+public sealed record TypedMapExpr(TypedExpr Container, TypedExpr Mapper, KlexirType Type) : TypedExpr(Type);
+
+public sealed record TypedBindExpr(TypedExpr Container, TypedExpr Mapper, KlexirType Type) : TypedExpr(Type);

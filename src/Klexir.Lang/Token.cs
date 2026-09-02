@@ -29,6 +29,16 @@ public enum TokenType
     Slash,
     LParen,
     RParen,
+    Comma,
+    Pipe,
+    Match,
+    With,
+    Some,
+    None,
+    Ok,
+    Err,
+    Map,
+    Bind,
     Eof,
 }
 

@@ -32,6 +32,9 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
             TokenType.Let => ParseLet(),
             TokenType.If => ParseIf(),
             TokenType.Fun => ParseFun(),
+            TokenType.Match => ParseMatch(),
+            TokenType.Map => ParseMapOrBind(isBind: false),
+            TokenType.Bind => ParseMapOrBind(isBind: true),
             _ => ParseComparison(),
         };
 
@@ -198,20 +201,309 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
             return Result<KlexirType>.Failure(Error.Create($"Expected a type name at {Current.Position}."));
         }
 
-        KlexirType? type = Current.Text switch
-        {
-            "Int" => KlexirType.Int,
-            "Bool" => KlexirType.Bool,
-            _ => null,
-        };
+        var name = Current.Text;
+        _position++;
 
-        if (type is null)
+        switch (name)
         {
-            return Result<KlexirType>.Failure(Error.Create($"Unknown type '{Current.Text}' at {Current.Position}."));
+            case "Int":
+                return Result<KlexirType>.Success(KlexirType.Int);
+
+            case "Bool":
+                return Result<KlexirType>.Success(KlexirType.Bool);
+
+            case "Option":
+                if (Current.Type != TokenType.Less)
+                {
+                    return Result<KlexirType>.Failure(Error.Create($"Expected '<' after 'Option' at {Current.Position}."));
+                }
+
+                _position++;
+
+                var element = ParseTypeAnnotation();
+                if (element.IsFailure)
+                {
+                    return element;
+                }
+
+                if (Current.Type != TokenType.Greater)
+                {
+                    return Result<KlexirType>.Failure(Error.Create($"Expected '>' at {Current.Position}."));
+                }
+
+                _position++;
+                return Result<KlexirType>.Success(new OptionType(element.Value));
+
+            case "Result":
+                if (Current.Type != TokenType.Less)
+                {
+                    return Result<KlexirType>.Failure(Error.Create($"Expected '<' after 'Result' at {Current.Position}."));
+                }
+
+                _position++;
+
+                var ok = ParseTypeAnnotation();
+                if (ok.IsFailure)
+                {
+                    return ok;
+                }
+
+                if (Current.Type != TokenType.Comma)
+                {
+                    return Result<KlexirType>.Failure(Error.Create($"Expected ',' at {Current.Position}."));
+                }
+
+                _position++;
+
+                var err = ParseTypeAnnotation();
+                if (err.IsFailure)
+                {
+                    return err;
+                }
+
+                if (Current.Type != TokenType.Greater)
+                {
+                    return Result<KlexirType>.Failure(Error.Create($"Expected '>' at {Current.Position}."));
+                }
+
+                _position++;
+                return Result<KlexirType>.Success(new ResultType(ok.Value, err.Value));
+
+            default:
+                return Result<KlexirType>.Failure(Error.Create($"Unknown type '{name}' at {Current.Position}."));
+        }
+    }
+
+    private Result<Expr> ParseMatch()
+    {
+        _position++; // 'match'
+
+        var scrutinee = ParseComparison();
+        if (scrutinee.IsFailure)
+        {
+            return scrutinee;
+        }
+
+        if (Current.Type != TokenType.With)
+        {
+            return Result<Expr>.Failure(Error.Create($"Expected 'with' at {Current.Position}."));
         }
 
         _position++;
-        return Result<KlexirType>.Success(type);
+
+        return Current.Type switch
+        {
+            TokenType.Some => ParseMatchOption(scrutinee.Value),
+            TokenType.Ok => ParseMatchResult(scrutinee.Value),
+            _ => Result<Expr>.Failure(Error.Create($"Expected 'Some' or 'Ok' at {Current.Position}.")),
+        };
+    }
+
+    private Result<Expr> ParseMatchOption(Expr scrutinee)
+    {
+        _position++; // 'Some'
+
+        var someBinder = ExpectBinderInParens();
+        if (someBinder.IsFailure)
+        {
+            return Result<Expr>.Failure(someBinder.Error);
+        }
+
+        var arrow1 = Expect(TokenType.FatArrow, "'=>'");
+        if (arrow1.IsFailure)
+        {
+            return Result<Expr>.Failure(arrow1.Error);
+        }
+
+        var someBody = ParseTop();
+        if (someBody.IsFailure)
+        {
+            return someBody;
+        }
+
+        var pipe = Expect(TokenType.Pipe, "'|'");
+        if (pipe.IsFailure)
+        {
+            return Result<Expr>.Failure(pipe.Error);
+        }
+
+        var none = Expect(TokenType.None, "'None'");
+        if (none.IsFailure)
+        {
+            return Result<Expr>.Failure(none.Error);
+        }
+
+        var arrow2 = Expect(TokenType.FatArrow, "'=>'");
+        if (arrow2.IsFailure)
+        {
+            return Result<Expr>.Failure(arrow2.Error);
+        }
+
+        var noneBody = ParseTop();
+        return noneBody.IsFailure
+            ? noneBody
+            : Result<Expr>.Success(new MatchOptionExpr(scrutinee, someBinder.Value, someBody.Value, noneBody.Value));
+    }
+
+    private Result<Expr> ParseMatchResult(Expr scrutinee)
+    {
+        _position++; // 'Ok'
+
+        var okBinder = ExpectBinderInParens();
+        if (okBinder.IsFailure)
+        {
+            return Result<Expr>.Failure(okBinder.Error);
+        }
+
+        var arrow1 = Expect(TokenType.FatArrow, "'=>'");
+        if (arrow1.IsFailure)
+        {
+            return Result<Expr>.Failure(arrow1.Error);
+        }
+
+        var okBody = ParseTop();
+        if (okBody.IsFailure)
+        {
+            return okBody;
+        }
+
+        var pipe = Expect(TokenType.Pipe, "'|'");
+        if (pipe.IsFailure)
+        {
+            return Result<Expr>.Failure(pipe.Error);
+        }
+
+        var err = Expect(TokenType.Err, "'Err'");
+        if (err.IsFailure)
+        {
+            return Result<Expr>.Failure(err.Error);
+        }
+
+        var errBinder = ExpectBinderInParens();
+        if (errBinder.IsFailure)
+        {
+            return Result<Expr>.Failure(errBinder.Error);
+        }
+
+        var arrow2 = Expect(TokenType.FatArrow, "'=>'");
+        if (arrow2.IsFailure)
+        {
+            return Result<Expr>.Failure(arrow2.Error);
+        }
+
+        var errBody = ParseTop();
+        return errBody.IsFailure
+            ? errBody
+            : Result<Expr>.Success(new MatchResultExpr(scrutinee, okBinder.Value, okBody.Value, errBinder.Value, errBody.Value));
+    }
+
+    private Result<Expr> ParseMapOrBind(bool isBind)
+    {
+        _position++; // 'map' or 'bind'
+
+        var open = Expect(TokenType.LParen, "'('");
+        if (open.IsFailure)
+        {
+            return Result<Expr>.Failure(open.Error);
+        }
+
+        var container = ParseTop();
+        if (container.IsFailure)
+        {
+            return container;
+        }
+
+        var comma = Expect(TokenType.Comma, "','");
+        if (comma.IsFailure)
+        {
+            return Result<Expr>.Failure(comma.Error);
+        }
+
+        var mapper = ParseTop();
+        if (mapper.IsFailure)
+        {
+            return mapper;
+        }
+
+        var close = Expect(TokenType.RParen, "')'");
+        if (close.IsFailure)
+        {
+            return Result<Expr>.Failure(close.Error);
+        }
+
+        return Result<Expr>.Success(isBind
+            ? new BindExpr(container.Value, mapper.Value)
+            : new MapExpr(container.Value, mapper.Value));
+    }
+
+    /// <summary>Consumes <c>(name)</c> and returns <c>name</c>, e.g. the binder in a <c>Some(x)</c> match arm.</summary>
+    private Result<string> ExpectBinderInParens()
+    {
+        var open = Expect(TokenType.LParen, "'('");
+        if (open.IsFailure)
+        {
+            return Result<string>.Failure(open.Error);
+        }
+
+        if (Current.Type != TokenType.Identifier)
+        {
+            return Result<string>.Failure(Error.Create($"Expected a binder name at {Current.Position}."));
+        }
+
+        var name = Current.Text;
+        _position++;
+
+        var close = Expect(TokenType.RParen, "')'");
+        return close.IsFailure ? Result<string>.Failure(close.Error) : Result<string>.Success(name);
+    }
+
+    /// <summary>Consumes <c>(expr)</c> and returns <c>expr</c>, e.g. the wrapped value in <c>Some(5)</c>.</summary>
+    private Result<Expr> ParseParenthesizedExpr()
+    {
+        var open = Expect(TokenType.LParen, "'('");
+        if (open.IsFailure)
+        {
+            return Result<Expr>.Failure(open.Error);
+        }
+
+        var value = ParseTop();
+        if (value.IsFailure)
+        {
+            return value;
+        }
+
+        var close = Expect(TokenType.RParen, "')'");
+        return close.IsFailure ? Result<Expr>.Failure(close.Error) : value;
+    }
+
+    /// <summary>Consumes <c>&lt;Type&gt;</c>, e.g. the explicit element type in <c>None&lt;Int&gt;</c>.</summary>
+    private Result<KlexirType> ParseGenericTypeArgument()
+    {
+        var open = Expect(TokenType.Less, "'<'");
+        if (open.IsFailure)
+        {
+            return Result<KlexirType>.Failure(open.Error);
+        }
+
+        var type = ParseTypeAnnotation();
+        if (type.IsFailure)
+        {
+            return type;
+        }
+
+        var close = Expect(TokenType.Greater, "'>'");
+        return close.IsFailure ? Result<KlexirType>.Failure(close.Error) : type;
+    }
+
+    private Result<Unit> Expect(TokenType type, string description)
+    {
+        if (Current.Type != type)
+        {
+            return Result<Unit>.Failure(Error.Create($"Expected {description} at {Current.Position}."));
+        }
+
+        _position++;
+        return Result<Unit>.Success(Unit.Value);
     }
 
     private Result<Expr> ParseLet()
@@ -415,6 +707,32 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
                 var name = Current.Text;
                 _position++;
                 return Result<Expr>.Success(new Identifier(name));
+
+            case TokenType.Some:
+                _position++;
+                return ParseParenthesizedExpr().Bind(value => Result<Expr>.Success(new SomeExpr(value)));
+
+            case TokenType.None:
+                _position++;
+                return ParseGenericTypeArgument().Bind(elementType => Result<Expr>.Success(new NoneExpr(elementType)));
+
+            case TokenType.Ok:
+                _position++;
+                return ParseGenericTypeArgument()
+                    .Bind(errType => ParseParenthesizedExpr()
+                        .Bind(value => Result<Expr>.Success(new OkExpr(errType, value))));
+
+            case TokenType.Err:
+                _position++;
+                return ParseGenericTypeArgument()
+                    .Bind(okType => ParseParenthesizedExpr()
+                        .Bind(value => Result<Expr>.Success(new ErrExpr(okType, value))));
+
+            case TokenType.Map:
+                return ParseMapOrBind(isBind: false);
+
+            case TokenType.Bind:
+                return ParseMapOrBind(isBind: true);
 
             case TokenType.LParen:
                 _position++;

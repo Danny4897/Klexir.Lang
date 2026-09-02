@@ -16,3 +16,11 @@ public sealed record ClosureValue(string ParamName, TypedExpr Body, IReadOnlyDic
 
     public override int GetHashCode() => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this);
 }
+
+public sealed record SomeValue(KlexirValue Value) : KlexirValue;
+
+public sealed record NoneValue : KlexirValue;
+
+public sealed record OkValue(KlexirValue Value) : KlexirValue;
+
+public sealed record ErrValue(KlexirValue Value) : KlexirValue;
