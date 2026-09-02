@@ -12,6 +12,8 @@ public sealed class TypeChecker
         {
             IntLiteral literal => Result<TypedExpr>.Success(new TypedIntLiteral(literal.Value)),
 
+            StringLiteral literal => Result<TypedExpr>.Success(new TypedStringLiteral(literal.Value)),
+
             BoolLiteral literal => Result<TypedExpr>.Success(new TypedBoolLiteral(literal.Value)),
 
             Identifier identifier => environment.TryGetValue(identifier.Name, out var declaredType)
@@ -20,17 +22,11 @@ public sealed class TypeChecker
 
             BinaryExpr binary => Check(binary.Left, environment)
                 .Bind(left => Check(binary.Right, environment)
-                    .Bind(right => left.Type == KlexirType.Int && right.Type == KlexirType.Int
-                        ? Result<TypedExpr>.Success(new TypedBinaryExpr(binary.Operator, left, right, KlexirType.Int))
-                        : Result<TypedExpr>.Failure(Error.Create(
-                            $"Operator '{binary.Operator}' requires Int operands, got {left.Type} and {right.Type}.")))),
+                    .Bind(right => CheckBinaryOperands(binary.Operator, left, right))),
 
             ComparisonExpr comparison => Check(comparison.Left, environment)
                 .Bind(left => Check(comparison.Right, environment)
-                    .Bind(right => left.Type == KlexirType.Int && right.Type == KlexirType.Int
-                        ? Result<TypedExpr>.Success(new TypedComparisonExpr(comparison.Operator, left, right))
-                        : Result<TypedExpr>.Failure(Error.Create(
-                            $"Comparison '{comparison.Operator}' requires Int operands, got {left.Type} and {right.Type}.")))),
+                    .Bind(right => CheckComparisonOperands(comparison.Operator, left, right))),
 
             IfExpr ifExpr => Check(ifExpr.Condition, environment)
                 .Bind(condition => condition.Type == KlexirType.Bool
@@ -80,8 +76,110 @@ public sealed class TypeChecker
 
             BindExpr bind => CheckBind(bind, environment),
 
+            ListExpr list => CheckList(list, environment),
+
+            EmptyListExpr empty => Result<TypedExpr>.Success(new TypedEmptyListExpr(new ListType(empty.ElementType))),
+
+            FilterExpr filter => CheckFilter(filter, environment),
+
+            FoldExpr fold => CheckFold(fold, environment),
+
             _ => Result<TypedExpr>.Failure(Error.Create($"Unsupported expression node '{expr.GetType().Name}'.")),
         };
+
+    private static Result<TypedExpr> CheckList(ListExpr list, IReadOnlyDictionary<string, KlexirType> environment)
+    {
+        var typedElements = new List<TypedExpr>();
+        KlexirType? elementType = null;
+
+        foreach (var element in list.Elements)
+        {
+            var result = Check(element, environment);
+            if (result.IsFailure)
+            {
+                return result;
+            }
+
+            elementType ??= result.Value.Type;
+            if (result.Value.Type != elementType)
+            {
+                return Result<TypedExpr>.Failure(Error.Create(
+                    $"List elements must share a type, got {elementType} and {result.Value.Type}."));
+            }
+
+            typedElements.Add(result.Value);
+        }
+
+        return Result<TypedExpr>.Success(new TypedListExpr(typedElements, new ListType(elementType!)));
+    }
+
+    private static Result<TypedExpr> CheckFilter(FilterExpr filter, IReadOnlyDictionary<string, KlexirType> environment)
+    {
+        var listResult = Check(filter.List, environment);
+        if (listResult.IsFailure)
+        {
+            return listResult;
+        }
+
+        if (listResult.Value.Type is not ListType listType)
+        {
+            return Result<TypedExpr>.Failure(Error.Create($"'filter' requires a List, got {listResult.Value.Type}."));
+        }
+
+        var predicateResult = Check(filter.Predicate, environment);
+        if (predicateResult.IsFailure)
+        {
+            return predicateResult;
+        }
+
+        if (predicateResult.Value.Type is not FunctionType predicateType
+            || predicateType.Parameter != listType.Element || predicateType.Return != KlexirType.Bool)
+        {
+            return Result<TypedExpr>.Failure(Error.Create(
+                $"'filter' requires a {listType.Element} -> Bool predicate, got {predicateResult.Value.Type}."));
+        }
+
+        return Result<TypedExpr>.Success(new TypedFilterExpr(listResult.Value, predicateResult.Value, listResult.Value.Type));
+    }
+
+    private static Result<TypedExpr> CheckFold(FoldExpr fold, IReadOnlyDictionary<string, KlexirType> environment)
+    {
+        var listResult = Check(fold.List, environment);
+        if (listResult.IsFailure)
+        {
+            return listResult;
+        }
+
+        if (listResult.Value.Type is not ListType listType)
+        {
+            return Result<TypedExpr>.Failure(Error.Create($"'fold' requires a List, got {listResult.Value.Type}."));
+        }
+
+        var initialResult = Check(fold.Initial, environment);
+        if (initialResult.IsFailure)
+        {
+            return initialResult;
+        }
+
+        var folderResult = Check(fold.Folder, environment);
+        if (folderResult.IsFailure)
+        {
+            return folderResult;
+        }
+
+        if (folderResult.Value.Type is not FunctionType outer
+            || outer.Parameter != initialResult.Value.Type
+            || outer.Return is not FunctionType inner
+            || inner.Parameter != listType.Element
+            || inner.Return != initialResult.Value.Type)
+        {
+            return Result<TypedExpr>.Failure(Error.Create(
+                $"'fold' requires a folder of type {initialResult.Value.Type} -> {listType.Element} -> {initialResult.Value.Type}, got {folderResult.Value.Type}."));
+        }
+
+        return Result<TypedExpr>.Success(
+            new TypedFoldExpr(listResult.Value, initialResult.Value, folderResult.Value, initialResult.Value.Type));
+    }
 
     private static Result<TypedExpr> CheckMatchOption(MatchOptionExpr match, IReadOnlyDictionary<string, KlexirType> environment)
     {
@@ -183,6 +281,9 @@ public sealed class TypeChecker
             ResultType resultType when mapperType.Parameter == resultType.Ok =>
                 Result<TypedExpr>.Success(new TypedMapExpr(containerResult.Value, mapperResult.Value, new ResultType(mapperType.Return, resultType.Err))),
 
+            ListType listType when mapperType.Parameter == listType.Element =>
+                Result<TypedExpr>.Success(new TypedMapExpr(containerResult.Value, mapperResult.Value, new ListType(mapperType.Return))),
+
             _ => Result<TypedExpr>.Failure(Error.Create(
                 $"'map' cannot apply a function from {mapperType.Parameter} over {containerResult.Value.Type}.")),
         };
@@ -248,6 +349,39 @@ public sealed class TypeChecker
 
         return Result<TypedExpr>.Success(new TypedLetRecExpr(
             letRec.Name, letRec.ParamName, letRec.ParamType, bodyResult.Value, functionType, letBodyResult.Value, letBodyResult.Value.Type));
+    }
+
+    private static Result<TypedExpr> CheckBinaryOperands(BinaryOperator op, TypedExpr left, TypedExpr right)
+    {
+        if (left.Type == KlexirType.Int && right.Type == KlexirType.Int)
+        {
+            return Result<TypedExpr>.Success(new TypedBinaryExpr(op, left, right, KlexirType.Int));
+        }
+
+        if (op == BinaryOperator.Add && left.Type == KlexirType.String && right.Type == KlexirType.String)
+        {
+            return Result<TypedExpr>.Success(new TypedBinaryExpr(op, left, right, KlexirType.String));
+        }
+
+        return Result<TypedExpr>.Failure(Error.Create(
+            $"Operator '{op}' requires Int operands (or String operands for '+'), got {left.Type} and {right.Type}."));
+    }
+
+    private static Result<TypedExpr> CheckComparisonOperands(ComparisonOperator op, TypedExpr left, TypedExpr right)
+    {
+        if (left.Type == KlexirType.Int && right.Type == KlexirType.Int)
+        {
+            return Result<TypedExpr>.Success(new TypedComparisonExpr(op, left, right));
+        }
+
+        if (op == ComparisonOperator.Equal && left.Type == right.Type
+            && left.Type is IntType or BoolType or StringType)
+        {
+            return Result<TypedExpr>.Success(new TypedComparisonExpr(op, left, right));
+        }
+
+        return Result<TypedExpr>.Failure(Error.Create(
+            $"Comparison '{op}' requires Int operands (or matching operands for '=='), got {left.Type} and {right.Type}."));
     }
 
     private static IReadOnlyDictionary<string, KlexirType> WithBinding(

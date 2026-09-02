@@ -35,6 +35,8 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
             TokenType.Match => ParseMatch(),
             TokenType.Map => ParseMapOrBind(isBind: false),
             TokenType.Bind => ParseMapOrBind(isBind: true),
+            TokenType.Filter => ParseFilter(),
+            TokenType.Fold => ParseFold(),
             _ => ParseComparison(),
         };
 
@@ -211,6 +213,31 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
 
             case "Bool":
                 return Result<KlexirType>.Success(KlexirType.Bool);
+
+            case "String":
+                return Result<KlexirType>.Success(KlexirType.String);
+
+            case "List":
+                if (Current.Type != TokenType.Less)
+                {
+                    return Result<KlexirType>.Failure(Error.Create($"Expected '<' after 'List' at {Current.Position}."));
+                }
+
+                _position++;
+
+                var listElement = ParseTypeAnnotation();
+                if (listElement.IsFailure)
+                {
+                    return listElement;
+                }
+
+                if (Current.Type != TokenType.Greater)
+                {
+                    return Result<KlexirType>.Failure(Error.Create($"Expected '>' at {Current.Position}."));
+                }
+
+                _position++;
+                return Result<KlexirType>.Success(new ListType(listElement.Value));
 
             case "Option":
                 if (Current.Type != TokenType.Less)
@@ -434,6 +461,124 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
         return Result<Expr>.Success(isBind
             ? new BindExpr(container.Value, mapper.Value)
             : new MapExpr(container.Value, mapper.Value));
+    }
+
+    private Result<Expr> ParseFilter()
+    {
+        _position++; // 'filter'
+
+        var open = Expect(TokenType.LParen, "'('");
+        if (open.IsFailure)
+        {
+            return Result<Expr>.Failure(open.Error);
+        }
+
+        var list = ParseTop();
+        if (list.IsFailure)
+        {
+            return list;
+        }
+
+        var comma = Expect(TokenType.Comma, "','");
+        if (comma.IsFailure)
+        {
+            return Result<Expr>.Failure(comma.Error);
+        }
+
+        var predicate = ParseTop();
+        if (predicate.IsFailure)
+        {
+            return predicate;
+        }
+
+        var close = Expect(TokenType.RParen, "')'");
+        return close.IsFailure
+            ? Result<Expr>.Failure(close.Error)
+            : Result<Expr>.Success(new FilterExpr(list.Value, predicate.Value));
+    }
+
+    private Result<Expr> ParseFold()
+    {
+        _position++; // 'fold'
+
+        var open = Expect(TokenType.LParen, "'('");
+        if (open.IsFailure)
+        {
+            return Result<Expr>.Failure(open.Error);
+        }
+
+        var list = ParseTop();
+        if (list.IsFailure)
+        {
+            return list;
+        }
+
+        var comma1 = Expect(TokenType.Comma, "','");
+        if (comma1.IsFailure)
+        {
+            return Result<Expr>.Failure(comma1.Error);
+        }
+
+        var initial = ParseTop();
+        if (initial.IsFailure)
+        {
+            return initial;
+        }
+
+        var comma2 = Expect(TokenType.Comma, "','");
+        if (comma2.IsFailure)
+        {
+            return Result<Expr>.Failure(comma2.Error);
+        }
+
+        var folder = ParseTop();
+        if (folder.IsFailure)
+        {
+            return folder;
+        }
+
+        var close = Expect(TokenType.RParen, "')'");
+        return close.IsFailure
+            ? Result<Expr>.Failure(close.Error)
+            : Result<Expr>.Success(new FoldExpr(list.Value, initial.Value, folder.Value));
+    }
+
+    /// <summary><c>[]&lt;Type&gt;</c> (empty, explicitly typed) or <c>[e1, e2, ...]</c> (element type inferred).</summary>
+    private Result<Expr> ParseListLiteral()
+    {
+        _position++; // '['
+
+        if (Current.Type == TokenType.RBracket)
+        {
+            _position++;
+            return ParseGenericTypeArgument().Bind(elementType => Result<Expr>.Success(new EmptyListExpr(elementType)));
+        }
+
+        var elements = new List<Expr>();
+
+        var first = ParseTop();
+        if (first.IsFailure)
+        {
+            return first;
+        }
+
+        elements.Add(first.Value);
+
+        while (Current.Type == TokenType.Comma)
+        {
+            _position++;
+
+            var next = ParseTop();
+            if (next.IsFailure)
+            {
+                return next;
+            }
+
+            elements.Add(next.Value);
+        }
+
+        var close = Expect(TokenType.RBracket, "']'");
+        return close.IsFailure ? Result<Expr>.Failure(close.Error) : Result<Expr>.Success(new ListExpr(elements));
     }
 
     /// <summary>Consumes <c>(name)</c> and returns <c>name</c>, e.g. the binder in a <c>Some(x)</c> match arm.</summary>
@@ -695,6 +840,11 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
                 _position++;
                 return Result<Expr>.Success(new IntLiteral(intValue));
 
+            case TokenType.String:
+                var stringValue = Current.Text;
+                _position++;
+                return Result<Expr>.Success(new StringLiteral(stringValue));
+
             case TokenType.True:
                 _position++;
                 return Result<Expr>.Success(new BoolLiteral(true));
@@ -733,6 +883,15 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
 
             case TokenType.Bind:
                 return ParseMapOrBind(isBind: true);
+
+            case TokenType.Filter:
+                return ParseFilter();
+
+            case TokenType.Fold:
+                return ParseFold();
+
+            case TokenType.LBracket:
+                return ParseListLiteral();
 
             case TokenType.LParen:
                 _position++;

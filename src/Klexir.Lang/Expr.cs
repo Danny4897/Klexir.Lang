@@ -4,6 +4,8 @@ public abstract record Expr;
 
 public sealed record IntLiteral(long Value) : Expr;
 
+public sealed record StringLiteral(string Value) : Expr;
+
 public sealed record Identifier(string Name) : Expr;
 
 public enum BinaryOperator
@@ -75,3 +77,15 @@ public sealed record MapExpr(Expr Container, Expr Mapper) : Expr;
 /// on <c>None</c>/<c>Err</c>, enabling railway-oriented composition.
 /// </summary>
 public sealed record BindExpr(Expr Container, Expr Mapper) : Expr;
+
+/// <summary><c>[e1, e2, ...]</c>. The element type is inferred from the (at least one) element expressions.</summary>
+public sealed record ListExpr(IReadOnlyList<Expr> Elements) : Expr;
+
+/// <summary><c>[]&lt;ElementType&gt;</c>. An empty list carries no elements, so its type must be written explicitly.</summary>
+public sealed record EmptyListExpr(KlexirType ElementType) : Expr;
+
+/// <summary><c>filter(list, predicate)</c> — keeps only the elements for which <c>predicate</c> returns <c>true</c>.</summary>
+public sealed record FilterExpr(Expr List, Expr Predicate) : Expr;
+
+/// <summary><c>fold(list, initial, folder)</c> — left-fold; <c>folder</c> is curried as <c>Acc -> Elem -> Acc</c>.</summary>
+public sealed record FoldExpr(Expr List, Expr Initial, Expr Folder) : Expr;

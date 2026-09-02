@@ -34,6 +34,18 @@ public sealed class Lexer(string source)
 
             var startColumn = column;
 
+            if (c == '"')
+            {
+                var stringResult = ScanString(ref i, ref line, ref column);
+                if (stringResult.IsFailure)
+                {
+                    return Result<IReadOnlyList<Token>>.Failure(stringResult.Error);
+                }
+
+                tokens.Add(new Token(TokenType.String, stringResult.Value, new SourcePosition(line, startColumn)));
+                continue;
+            }
+
             if (char.IsDigit(c))
             {
                 var start = i;
@@ -76,6 +88,8 @@ public sealed class Lexer(string source)
                     "Err" => TokenType.Err,
                     "map" => TokenType.Map,
                     "bind" => TokenType.Bind,
+                    "filter" => TokenType.Filter,
+                    "fold" => TokenType.Fold,
                     _ => TokenType.Identifier,
                 };
                 tokens.Add(new Token(type, text, new SourcePosition(line, startColumn)));
@@ -115,6 +129,8 @@ public sealed class Lexer(string source)
                 '/' => TokenType.Slash,
                 '(' => TokenType.LParen,
                 ')' => TokenType.RParen,
+                '[' => TokenType.LBracket,
+                ']' => TokenType.RBracket,
                 ':' => TokenType.Colon,
                 ',' => TokenType.Comma,
                 '|' => TokenType.Pipe,
@@ -134,5 +150,72 @@ public sealed class Lexer(string source)
 
         tokens.Add(new Token(TokenType.Eof, string.Empty, new SourcePosition(line, column)));
         return Result<IReadOnlyList<Token>>.Success(tokens);
+    }
+
+    /// <summary>Scans a <c>"..."</c> literal starting at the opening quote, unescaping <c>\" \\ \n</c> as it goes.</summary>
+    private Result<string> ScanString(ref int i, ref int line, ref int column)
+    {
+        var startPosition = new SourcePosition(line, column);
+        i++; // opening quote
+        column++;
+
+        var text = new System.Text.StringBuilder();
+
+        while (true)
+        {
+            if (i >= source.Length)
+            {
+                return Result<string>.Failure(Error.Create($"Unterminated string literal starting at {startPosition}."));
+            }
+
+            var c = source[i];
+
+            if (c == '"')
+            {
+                i++;
+                column++;
+                return Result<string>.Success(text.ToString());
+            }
+
+            if (c == '\n')
+            {
+                text.Append(c);
+                i++;
+                line++;
+                column = 1;
+                continue;
+            }
+
+            if (c == '\\')
+            {
+                if (i + 1 >= source.Length)
+                {
+                    return Result<string>.Failure(Error.Create($"Unterminated string literal starting at {startPosition}."));
+                }
+
+                char? escaped = source[i + 1] switch
+                {
+                    '"' => '"',
+                    '\\' => '\\',
+                    'n' => '\n',
+                    _ => null,
+                };
+
+                if (escaped is not { } escapedChar)
+                {
+                    return Result<string>.Failure(Error.Create(
+                        $"Unknown escape sequence '\\{source[i + 1]}' at {new SourcePosition(line, column)}."));
+                }
+
+                text.Append(escapedChar);
+                i += 2;
+                column += 2;
+                continue;
+            }
+
+            text.Append(c);
+            i++;
+            column++;
+        }
     }
 }

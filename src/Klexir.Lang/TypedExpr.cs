@@ -6,6 +6,8 @@ public abstract record KlexirType
     public static readonly KlexirType Int = new IntType();
 
     public static readonly KlexirType Bool = new BoolType();
+
+    public static readonly KlexirType String = new StringType();
 }
 
 public sealed record IntType : KlexirType
@@ -16,6 +18,11 @@ public sealed record IntType : KlexirType
 public sealed record BoolType : KlexirType
 {
     public override string ToString() => "Bool";
+}
+
+public sealed record StringType : KlexirType
+{
+    public override string ToString() => "String";
 }
 
 public sealed record FunctionType(KlexirType Parameter, KlexirType Return) : KlexirType
@@ -33,9 +40,16 @@ public sealed record ResultType(KlexirType Ok, KlexirType Err) : KlexirType
     public override string ToString() => $"Result<{Ok}, {Err}>";
 }
 
+public sealed record ListType(KlexirType Element) : KlexirType
+{
+    public override string ToString() => $"List<{Element}>";
+}
+
 public abstract record TypedExpr(KlexirType Type);
 
 public sealed record TypedIntLiteral(long Value) : TypedExpr(KlexirType.Int);
+
+public sealed record TypedStringLiteral(string Value) : TypedExpr(KlexirType.String);
 
 public sealed record TypedBoolLiteral(bool Value) : TypedExpr(KlexirType.Bool);
 
@@ -73,3 +87,11 @@ public sealed record TypedMatchResultExpr(
 public sealed record TypedMapExpr(TypedExpr Container, TypedExpr Mapper, KlexirType Type) : TypedExpr(Type);
 
 public sealed record TypedBindExpr(TypedExpr Container, TypedExpr Mapper, KlexirType Type) : TypedExpr(Type);
+
+public sealed record TypedListExpr(IReadOnlyList<TypedExpr> Elements, KlexirType Type) : TypedExpr(Type);
+
+public sealed record TypedEmptyListExpr(KlexirType Type) : TypedExpr(Type);
+
+public sealed record TypedFilterExpr(TypedExpr List, TypedExpr Predicate, KlexirType Type) : TypedExpr(Type);
+
+public sealed record TypedFoldExpr(TypedExpr List, TypedExpr Initial, TypedExpr Folder, KlexirType Type) : TypedExpr(Type);

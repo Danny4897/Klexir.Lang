@@ -16,6 +16,8 @@ public sealed class Evaluator
         {
             TypedIntLiteral literal => Result<KlexirValue>.Success(new IntValue(literal.Value)),
 
+            TypedStringLiteral literal => Result<KlexirValue>.Success(new StringValue(literal.Value)),
+
             TypedBoolLiteral literal => Result<KlexirValue>.Success(new BoolValue(literal.Value)),
 
             TypedIdentifier identifier => environment.TryGetValue(identifier.Name, out var value)
@@ -83,8 +85,94 @@ public sealed class Evaluator
                 .Bind(container => Evaluate(bind.Mapper, environment)
                     .Bind(mapper => ApplyBind(container, mapper))),
 
+            TypedListExpr list => EvaluateList(list.Elements, environment),
+
+            TypedEmptyListExpr => Result<KlexirValue>.Success(new ListValue(Array.Empty<KlexirValue>())),
+
+            TypedFilterExpr filter => Evaluate(filter.List, environment)
+                .Bind(list => Evaluate(filter.Predicate, environment)
+                    .Bind(predicate => ApplyFilter(list, predicate))),
+
+            TypedFoldExpr fold => Evaluate(fold.List, environment)
+                .Bind(list => Evaluate(fold.Initial, environment)
+                    .Bind(initial => Evaluate(fold.Folder, environment)
+                        .Bind(folder => ApplyFold(list, initial, folder)))),
+
             _ => Result<KlexirValue>.Failure(Error.Create($"Unsupported typed node '{expr.GetType().Name}'.")),
         };
+
+    private static Result<KlexirValue> EvaluateList(
+        IReadOnlyList<TypedExpr> elements, IReadOnlyDictionary<string, KlexirValue> environment)
+    {
+        var values = new List<KlexirValue>(elements.Count);
+
+        foreach (var element in elements)
+        {
+            var result = Evaluate(element, environment);
+            if (result.IsFailure)
+            {
+                return result;
+            }
+
+            values.Add(result.Value);
+        }
+
+        return Result<KlexirValue>.Success(new ListValue(values));
+    }
+
+    private static Result<KlexirValue> ApplyFilter(KlexirValue container, KlexirValue predicate)
+    {
+        if (container is not ListValue list)
+        {
+            return Result<KlexirValue>.Failure(Error.Create("'filter' requires a List value."));
+        }
+
+        var kept = new List<KlexirValue>();
+
+        foreach (var element in list.Elements)
+        {
+            var keptResult = ApplyClosure(predicate, element);
+            if (keptResult.IsFailure)
+            {
+                return keptResult;
+            }
+
+            if (keptResult.Value is not BoolValue boolValue)
+            {
+                return Result<KlexirValue>.Failure(Error.Create("'filter' predicate did not evaluate to Bool."));
+            }
+
+            if (boolValue.Value)
+            {
+                kept.Add(element);
+            }
+        }
+
+        return Result<KlexirValue>.Success(new ListValue(kept));
+    }
+
+    private static Result<KlexirValue> ApplyFold(KlexirValue container, KlexirValue initial, KlexirValue folder)
+    {
+        if (container is not ListValue list)
+        {
+            return Result<KlexirValue>.Failure(Error.Create("'fold' requires a List value."));
+        }
+
+        var accumulator = initial;
+
+        foreach (var element in list.Elements)
+        {
+            var stepped = ApplyClosure(folder, accumulator).Bind(step => ApplyClosure(step, element));
+            if (stepped.IsFailure)
+            {
+                return stepped;
+            }
+
+            accumulator = stepped.Value;
+        }
+
+        return Result<KlexirValue>.Success(accumulator);
+    }
 
     private static Result<KlexirValue> ApplyClosure(KlexirValue function, KlexirValue argument) =>
         function is ClosureValue closure
@@ -99,8 +187,27 @@ public sealed class Evaluator
             NoneValue => Result<KlexirValue>.Success(container),
             OkValue ok => ApplyClosure(mapper, ok.Value).Bind(value => Result<KlexirValue>.Success(new OkValue(value))),
             ErrValue => Result<KlexirValue>.Success(container),
-            _ => Result<KlexirValue>.Failure(Error.Create("'map' requires an Option or Result value.")),
+            ListValue list => ApplyMapList(list, mapper),
+            _ => Result<KlexirValue>.Failure(Error.Create("'map' requires an Option, Result, or List value.")),
         };
+
+    private static Result<KlexirValue> ApplyMapList(ListValue list, KlexirValue mapper)
+    {
+        var mapped = new List<KlexirValue>(list.Elements.Count);
+
+        foreach (var element in list.Elements)
+        {
+            var result = ApplyClosure(mapper, element);
+            if (result.IsFailure)
+            {
+                return result;
+            }
+
+            mapped.Add(result.Value);
+        }
+
+        return Result<KlexirValue>.Success(new ListValue(mapped));
+    }
 
     /// <summary>The Monad operation: chains a container-returning function, short-circuiting on None/Err.</summary>
     private static Result<KlexirValue> ApplyBind(KlexirValue container, KlexirValue mapper) =>
@@ -129,42 +236,53 @@ public sealed class Evaluator
 
     private static Result<KlexirValue> ApplyBinary(BinaryOperator op, KlexirValue left, KlexirValue right)
     {
-        if (left is not IntValue l || right is not IntValue r)
+        if (left is IntValue l && right is IntValue r)
         {
-            return Result<KlexirValue>.Failure(Error.Create($"Operator '{op}' requires Int operands at evaluation time."));
+            if (op == BinaryOperator.Div && r.Value == 0)
+            {
+                return Result<KlexirValue>.Failure(Error.Create("Division by zero."));
+            }
+
+            return Result<KlexirValue>.Success(new IntValue(op switch
+            {
+                BinaryOperator.Add => l.Value + r.Value,
+                BinaryOperator.Sub => l.Value - r.Value,
+                BinaryOperator.Mul => l.Value * r.Value,
+                BinaryOperator.Div => l.Value / r.Value,
+                _ => throw new ArgumentOutOfRangeException(nameof(op), op, "Not a binary operator."),
+            }));
         }
 
-        if (op == BinaryOperator.Div && r.Value == 0)
+        if (op == BinaryOperator.Add && left is StringValue ls && right is StringValue rs)
         {
-            return Result<KlexirValue>.Failure(Error.Create("Division by zero."));
+            return Result<KlexirValue>.Success(new StringValue(ls.Value + rs.Value));
         }
 
-        return Result<KlexirValue>.Success(new IntValue(op switch
-        {
-            BinaryOperator.Add => l.Value + r.Value,
-            BinaryOperator.Sub => l.Value - r.Value,
-            BinaryOperator.Mul => l.Value * r.Value,
-            BinaryOperator.Div => l.Value / r.Value,
-            _ => throw new ArgumentOutOfRangeException(nameof(op), op, "Not a binary operator."),
-        }));
+        return Result<KlexirValue>.Failure(Error.Create(
+            $"Operator '{op}' requires Int operands (or String operands for '+') at evaluation time."));
     }
 
     private static Result<KlexirValue> ApplyComparison(ComparisonOperator op, KlexirValue left, KlexirValue right)
     {
-        if (left is not IntValue l || right is not IntValue r)
+        if (left is IntValue l && right is IntValue r)
         {
-            return Result<KlexirValue>.Failure(Error.Create($"Comparison '{op}' requires Int operands at evaluation time."));
+            return Result<KlexirValue>.Success(new BoolValue(op switch
+            {
+                ComparisonOperator.Equal => l.Value == r.Value,
+                ComparisonOperator.LessThan => l.Value < r.Value,
+                ComparisonOperator.GreaterThan => l.Value > r.Value,
+                ComparisonOperator.LessThanOrEqual => l.Value <= r.Value,
+                ComparisonOperator.GreaterThanOrEqual => l.Value >= r.Value,
+                _ => throw new ArgumentOutOfRangeException(nameof(op), op, "Not a comparison operator."),
+            }));
         }
 
-        return Result<KlexirValue>.Success(new BoolValue(op switch
+        if (op == ComparisonOperator.Equal)
         {
-            ComparisonOperator.Equal => l.Value == r.Value,
-            ComparisonOperator.LessThan => l.Value < r.Value,
-            ComparisonOperator.GreaterThan => l.Value > r.Value,
-            ComparisonOperator.LessThanOrEqual => l.Value <= r.Value,
-            ComparisonOperator.GreaterThanOrEqual => l.Value >= r.Value,
-            _ => throw new ArgumentOutOfRangeException(nameof(op), op, "Not a comparison operator."),
-        }));
+            return Result<KlexirValue>.Success(new BoolValue(left.Equals(right)));
+        }
+
+        return Result<KlexirValue>.Failure(Error.Create($"Comparison '{op}' requires Int operands at evaluation time."));
     }
 
     private static IReadOnlyDictionary<string, KlexirValue> WithBinding(

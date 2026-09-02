@@ -5,6 +5,7 @@ namespace Klexir.Lang;
 public enum TokenType
 {
     Int,
+    String,
     Identifier,
     Let,
     Rec,
@@ -29,6 +30,8 @@ public enum TokenType
     Slash,
     LParen,
     RParen,
+    LBracket,
+    RBracket,
     Comma,
     Pipe,
     Match,
@@ -39,6 +42,8 @@ public enum TokenType
     Err,
     Map,
     Bind,
+    Filter,
+    Fold,
     Eof,
 }
 

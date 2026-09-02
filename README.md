@@ -3,7 +3,7 @@
 [![CI](https://github.com/Danny4897/Klexir.Lang/actions/workflows/ci.yml/badge.svg)](https://github.com/Danny4897/Klexir.Lang/actions/workflows/ci.yml)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/)
 
-The Klexir programming language: a lexer, a recursive-descent parser, a structural type checker, and a tree-walking evaluator — so a Klexir program written as a string can now be tokenized, parsed, type-checked, and actually **run** to a value. Built on [MonadicSharp](https://www.nuget.org/packages/MonadicSharp/) `Result<T>` — no exceptions for compiler-control flow, ever, evaluation included. `Option<T>` and `Result<T, E>` aren't just how the compiler is implemented — they're first-class Klexir *types*, with `Some`/`None`/`Ok`/`Err`, exhaustive `match`, and `map`/`bind` for railway-oriented composition inside the language itself.
+The Klexir programming language: a lexer, a recursive-descent parser, a structural type checker, and a tree-walking evaluator — so a Klexir program written as a string can now be tokenized, parsed, type-checked, and actually **run** to a value. Built on [MonadicSharp](https://www.nuget.org/packages/MonadicSharp/) `Result<T>` — no exceptions for compiler-control flow, ever, evaluation included. `Option<T>` and `Result<T, E>` aren't just how the compiler is implemented — they're first-class Klexir *types*, with `Some`/`None`/`Ok`/`Err`, exhaustive `match`, and `map`/`bind` for railway-oriented composition inside the language itself. `Int`, `Bool`, `String`, and `List<T>` are the ground data types, and `KlexirInterop` bridges a Klexir program's `Option`/`Result` straight into a real MonadicSharp `Option<T>`/`Result<T>` for a hosting .NET app.
 
 > **Status: private research repo, not published to NuGet.** No compiler to `Klexir.Runtime` bytecode yet — this evaluator interprets the typed AST directly. See [What can't Klexir do yet?](#what-cant-klexir-do-yet) below. Reference the project directly until/unless it's published.
 
@@ -49,6 +49,21 @@ Run("""
     """); // IntValue(10) — bind short-circuits to the Err branch the moment any step fails
 ```
 
+Strings and `List<T>` are real ground types too, with `map`/`filter`/`fold` on lists:
+
+```csharp
+Run("""fold(filter([1, 2, 3, 4, 5], fun (x: Int) => x > 2), 0, fun (acc: Int) => fun (x: Int) => acc + x)""");
+// IntValue(12) — keep 3,4,5, then sum them
+```
+
+And `KlexirInterop` bridges a Klexir `Result` straight into a real MonadicSharp one, so a hosting app gets back the type it already knows how to work with:
+
+```csharp
+var klexirValue = Run("""let safeDiv = fun (n: Int) => if n == 0 then Err<Int>(true) else Ok<Bool>(100 / n) in safeDiv 4""");
+Result<long> bridged = KlexirInterop.ToResult(klexirValue, KlexirInterop.AsInt, e => "division by zero");
+bridged.Value; // 25 — a real MonadicSharp Result<long>, not a KlexirValue tree
+```
+
 ---
 
 ## What's in the box
@@ -66,6 +81,10 @@ Run("""
 | `Result<T, E>` | `Ok<E>(v)`, `Err<T>(v)`, `KlexirType.ResultType` | The constructor infers the type it can (the value's) and takes the other one explicitly — mirrors `Option`'s `None` |
 | Pattern matching | `match e with Some(x) => a \| None => b` / `match e with Ok(x) => a \| Err(e) => b` | Exhaustive by construction (only two variants each); both `match` arms must agree on type |
 | Functor/Monad ops | `map(container, mapper)`, `bind(container, mapper)` | `map` transforms Some/Ok and passes None/Err through untouched; `bind` chains a container-returning function and short-circuits on None/Err — Result's error type can't change mid-chain |
+| `String` | `"..."`, `+` (concatenation), `==` | Literals support `\" \\ \n` escapes; `+` on two `String`s concatenates instead of adding; ordering (`< > <= >=`) isn't defined for strings |
+| `List<T>` | `[e1, e2, ...]`, `[]<T>`, `KlexirType.ListType` | Element type inferred from the elements (must all agree); an empty list needs its type written explicitly, same as `None` |
+| List ops | `map(list, fn)`, `filter(list, predicate)`, `fold(list, initial, folder)` | `map` doubles as List's Functor op; `filter` keeps elements where `predicate` is `true`; `fold` is left-fold with a curried `Acc -> Elem -> Acc` folder |
+| MonadicSharp bridge | `KlexirInterop.ToOption/ToResult/FromOption/FromResult`, `AsInt/AsBool/AsString` | Converts a Klexir `Some`/`None`/`Ok`/`Err` value to/from a real `MonadicSharp.Option<T>`/`Result<T>` — a hosting .NET app gets the type it already works with, not a `KlexirValue` tree to pattern-match by hand |
 
 ### Language sample
 
@@ -85,7 +104,7 @@ with Ok(x) => x | Err(e) => 0
 
 ### Layered architecture: controller → service → repository
 
-Klexir has no strings or records yet (see [below](#what-cant-klexir-do-yet)), so this stands in `Int` for an entity id/value and an `Int` error code for what would normally be a typed exception/error enum. What it *does* show for real: three independent functions, each with its own single responsibility and its own `Result`/`Option` boundary, composed with `bind` instead of `if (result.IsFailure) return ...` — the railway short-circuits through the whole call chain on the first failure, no branching required at the call site.
+Klexir has no user-defined records yet (see [below](#what-cant-klexir-do-yet)), so this still stands in `Int` for an entity id/value and an `Int` error code for what would normally be a typed exception/error enum — `String` exists now, but a real `User` record with named fields doesn't. What it *does* show for real: three independent functions, each with its own single responsibility and its own `Result`/`Option` boundary, composed with `bind` instead of `if (result.IsFailure) return ...` — the railway short-circuits through the whole call chain on the first failure, no branching required at the call site.
 
 ```
 // --- repository: owns the data, returns Option — "found or not", no notion of *why* ---
@@ -122,13 +141,13 @@ handleGetAdultAge 2   // 25 — adult, age passed through
 
 ## What can't Klexir do yet?
 
-A Klexir *expression* runs end to end today (see the quick example above), and `Option<T>`/`Result<T, E>` are real, first-class, pattern-matchable types in the language now — not just how the compiler happens to be written. What's still missing before it's a language you'd write a real program in:
+A Klexir *expression* runs end to end today (see the quick example above); `Option<T>`/`Result<T, E>` are real, first-class, pattern-matchable types; `String` and `List<T>` cover real data, not just `Int`/`Bool`; and `KlexirInterop` bridges Klexir's `Option`/`Result` to the real MonadicSharp ones for a hosting .NET app. What's still missing before it's a language you'd write a real program in:
 
 1. **A compiler to `Klexir.Runtime` bytecode.** The evaluator interprets the AST directly (tree-walking) — there's no IR, no codegen, no way to produce a standalone `.klx` bytecode file `Klexir.Runtime` can run without this repo present. (`Klexir.Runtime` also has no local-variable or jump opcodes yet, which a real codegen would need.)
-2. **Real language features.** No strings, no collections, no user-defined records/ADTs, no negative integer literals, no modules, no I/O. `Option`/`Result` are the only sum types — they're built into the checker/evaluator, not something a Klexir program can define for itself.
-3. **.NET interop.** Klexir code has no way to call into C# or exchange values with a hosting .NET application — `Option`/`Result` are modeled *inside* the language now, but a Klexir `SomeValue`/`OkValue` and a real MonadicSharp `Option<T>`/`Result<T>` are still two separate types with no bridge between them.
+2. **User-defined types.** `Option`/`Result`/`List` are the only structured types, and they're built into the checker/evaluator — a Klexir program can't define its own record (`User { Id: Int, Age: Int }`) or union type. No modules, no I/O, no negative integer literals either.
+3. **Calling .NET *from* Klexir.** `KlexirInterop` bridges Klexir values *out* to real MonadicSharp types for a hosting app to consume — but Klexir code itself still can't call an arbitrary C# method or use a .NET library; the bridge is one-directional at the language boundary, not a general FFI.
 
-**If the goal is "build a real solution using Result-oriented, railway-style code today,"** [MonadicSharp](https://www.nuget.org/packages/MonadicSharp/) is still where you'd do it, in C#, in production, right now — Klexir.Lang can express the same `bind`/`map` chains as actual language syntax, but a real compiler backend and a bridge back to .NET are still the bigger remaining project.
+**If the goal is "build a real solution using Result-oriented, railway-style code today,"** [MonadicSharp](https://www.nuget.org/packages/MonadicSharp/) is still where you'd do it, in C#, in production, right now — Klexir.Lang can express the same `bind`/`map` chains as actual language syntax and hand the result back to MonadicSharp via `KlexirInterop`, but a real compiler backend and user-defined types are still the bigger remaining project.
 
 ## Requirements
 
