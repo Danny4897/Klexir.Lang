@@ -30,8 +30,84 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
         {
             TokenType.Let => ParseLet(),
             TokenType.If => ParseIf(),
+            TokenType.Fun => ParseFun(),
             _ => ParseComparison(),
         };
+
+    private Result<Expr> ParseFun()
+    {
+        _position++; // 'fun'
+
+        if (Current.Type != TokenType.LParen)
+        {
+            return Result<Expr>.Failure(Error.Create($"Expected '(' after 'fun' at {Current.Position}."));
+        }
+
+        _position++;
+
+        if (Current.Type != TokenType.Identifier)
+        {
+            return Result<Expr>.Failure(Error.Create($"Expected a parameter name at {Current.Position}."));
+        }
+
+        var paramName = Current.Text;
+        _position++;
+
+        if (Current.Type != TokenType.Colon)
+        {
+            return Result<Expr>.Failure(Error.Create($"Expected ':' after parameter name at {Current.Position}."));
+        }
+
+        _position++;
+
+        var paramType = ParseTypeAnnotation();
+        if (paramType.IsFailure)
+        {
+            return Result<Expr>.Failure(paramType.Error);
+        }
+
+        if (Current.Type != TokenType.RParen)
+        {
+            return Result<Expr>.Failure(Error.Create($"Expected ')' at {Current.Position}."));
+        }
+
+        _position++;
+
+        if (Current.Type != TokenType.FatArrow)
+        {
+            return Result<Expr>.Failure(Error.Create($"Expected '=>' at {Current.Position}."));
+        }
+
+        _position++;
+
+        var body = ParseTop();
+        return body.IsFailure
+            ? body
+            : Result<Expr>.Success(new FunExpr(paramName, paramType.Value, body.Value));
+    }
+
+    private Result<KlexirType> ParseTypeAnnotation()
+    {
+        if (Current.Type != TokenType.Identifier)
+        {
+            return Result<KlexirType>.Failure(Error.Create($"Expected a type name at {Current.Position}."));
+        }
+
+        KlexirType? type = Current.Text switch
+        {
+            "Int" => KlexirType.Int,
+            "Bool" => KlexirType.Bool,
+            _ => null,
+        };
+
+        if (type is null)
+        {
+            return Result<KlexirType>.Failure(Error.Create($"Unknown type '{Current.Text}' at {Current.Position}."));
+        }
+
+        _position++;
+        return Result<KlexirType>.Success(type);
+    }
 
     private Result<Expr> ParseLet()
     {
@@ -163,7 +239,7 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
 
     private Result<Expr> ParseMultiplicative()
     {
-        var left = ParsePrimary();
+        var left = ParseApplication();
         if (left.IsFailure)
         {
             return left;
@@ -176,13 +252,38 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
             var op = Current.Type == TokenType.Star ? BinaryOperator.Mul : BinaryOperator.Div;
             _position++;
 
-            var right = ParsePrimary();
+            var right = ParseApplication();
             if (right.IsFailure)
             {
                 return right;
             }
 
             expr = new BinaryExpr(op, expr, right.Value);
+        }
+
+        return Result<Expr>.Success(expr);
+    }
+
+    /// <summary>Left-associative juxtaposition application (<c>f x y</c> parses as <c>(f x) y</c>), tighter than * /.</summary>
+    private Result<Expr> ParseApplication()
+    {
+        var left = ParsePrimary();
+        if (left.IsFailure)
+        {
+            return left;
+        }
+
+        var expr = left.Value;
+
+        while (Current.Type is TokenType.Int or TokenType.True or TokenType.False or TokenType.Identifier or TokenType.LParen)
+        {
+            var arg = ParsePrimary();
+            if (arg.IsFailure)
+            {
+                return arg;
+            }
+
+            expr = new AppExpr(expr, arg.Value);
         }
 
         return Result<Expr>.Success(expr);

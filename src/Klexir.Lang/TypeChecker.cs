@@ -46,6 +46,19 @@ public sealed class TypeChecker
                 .Bind(value => Check(let.Body, WithBinding(environment, let.Name, value.Type))
                     .Bind(body => Result<TypedExpr>.Success(new TypedLetExpr(let.Name, value, body, body.Type)))),
 
+            FunExpr fun => Check(fun.Body, WithBinding(environment, fun.ParamName, fun.ParamType))
+                .Bind(body => Result<TypedExpr>.Success(
+                    new TypedFunExpr(fun.ParamName, fun.ParamType, body, new FunctionType(fun.ParamType, body.Type)))),
+
+            AppExpr app => Check(app.Function, environment)
+                .Bind(function => function.Type is FunctionType functionType
+                    ? Check(app.Argument, environment)
+                        .Bind(argument => argument.Type == functionType.Parameter
+                            ? Result<TypedExpr>.Success(new TypedAppExpr(function, argument, functionType.Return))
+                            : Result<TypedExpr>.Failure(Error.Create(
+                                $"Function expects {functionType.Parameter} but got {argument.Type}.")))
+                    : Result<TypedExpr>.Failure(Error.Create($"Cannot apply a non-function value of type {function.Type}."))),
+
             _ => Result<TypedExpr>.Failure(Error.Create($"Unsupported expression node '{expr.GetType().Name}'.")),
         };
 

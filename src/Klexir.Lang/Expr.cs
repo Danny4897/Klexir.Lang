@@ -32,3 +32,7 @@ public enum ComparisonOperator
 public sealed record ComparisonExpr(ComparisonOperator Operator, Expr Left, Expr Right) : Expr;
 
 public sealed record IfExpr(Expr Condition, Expr Then, Expr Else) : Expr;
+
+public sealed record FunExpr(string ParamName, KlexirType ParamType, Expr Body) : Expr;
+
+public sealed record AppExpr(Expr Function, Expr Argument) : Expr;

@@ -21,4 +21,6 @@ new Lexer("if 1 < 2 then 10 else 20").Tokenize()
 // If, Int, Less, Int, Then, Int, Else, Int, Eof
 ```
 
-Pattern matching/ADTs, closures/modules, and the IR/bytecode emitter targeting `Klexir.Runtime` follow in later increments.
+`KlexirType` is now a small type hierarchy (`IntType`/`BoolType`/`FunctionType`), not a flat enum — `fun (x: Int) => x + 1` parses to a `FunExpr` and type-checks to `FunctionType(Int, Int)`; application is left-associative juxtaposition (`f x y` = `(f x) y`) and binds tighter than `* /`, so `f x + 1` parses as `(f x) + 1`. Applying a non-function, or a function to the wrong argument type, fails the check. Parameter type annotations are limited to `Int`/`Bool` — a parameter typed as a function itself (higher-order functions) isn't parseable yet.
+
+Pattern matching/ADTs, modules, and the IR/bytecode emitter targeting `Klexir.Runtime` follow in later increments.

@@ -62,7 +62,9 @@ public sealed class ParserTests
     [Fact]
     public void ParseExpression_fails_on_a_trailing_token_after_a_complete_expression()
     {
-        Parse("5 3").IsFailure.Should().BeTrue();
+        // "5 3" is no longer trailing garbage once juxtaposition application exists — it parses as
+        // AppExpr(5, 3) (ill-typed, but syntactically valid). Use a token that can't start any expression instead.
+        Parse("5 =").IsFailure.Should().BeTrue();
     }
 
     private static Expr ParseSuccessfully(string source)
