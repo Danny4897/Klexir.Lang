@@ -83,6 +83,43 @@ match bind(safeDiv 4, fun (x: Int) => Ok<Bool>(x + 1))
 with Ok(x) => x | Err(e) => 0
 ```
 
+### Layered architecture: controller → service → repository
+
+Klexir has no strings or records yet (see [below](#what-cant-klexir-do-yet)), so this stands in `Int` for an entity id/value and an `Int` error code for what would normally be a typed exception/error enum. What it *does* show for real: three independent functions, each with its own single responsibility and its own `Result`/`Option` boundary, composed with `bind` instead of `if (result.IsFailure) return ...` — the railway short-circuits through the whole call chain on the first failure, no branching required at the call site.
+
+```
+// --- repository: owns the data, returns Option — "found or not", no notion of *why* ---
+let findUserAge = fun (userId: Int) =>
+    if userId == 1 then Some(17)        // known user, underage
+    else if userId == 2 then Some(25)   // known user, adult
+    else None<Int>                      // unknown user
+in
+
+// --- adapter: repository's Option becomes the service layer's Result, with a real error code ---
+let toLookupResult = fun (age: Option<Int>) =>
+    match age with Some(x) => Ok<Int>(x) | None => Err<Int>(1)   // 1 = user not found
+in
+
+// --- service: the business rule, oblivious to where the value came from ---
+let checkAdult = fun (age: Int) =>
+    if age >= 18 then Ok<Int>(age) else Err<Int>(2)              // 2 = underage
+in
+
+// --- service: orchestrates repo + rule; bind short-circuits to Err(1) without ever calling checkAdult ---
+let getAdultAge = fun (userId: Int) =>
+    bind(toLookupResult (findUserAge userId), checkAdult)
+in
+
+// --- controller: the only layer allowed to turn a Result back into a plain response value ---
+let handleGetAdultAge = fun (userId: Int) =>
+    match getAdultAge userId with Ok(age) => age | Err(code) => code
+in
+
+handleGetAdultAge 2   // 25 — adult, age passed through
+```
+
+`handleGetAdultAge 1` returns `2` (underage, `checkAdult` ran and rejected it); `handleGetAdultAge 99` returns `1` (unknown user — `checkAdult` never even runs, `bind` short-circuited at the repository boundary). Three call sites, one `match`, zero manual "if failed, propagate" checks — that's what `bind` buys you.
+
 ## What can't Klexir do yet?
 
 A Klexir *expression* runs end to end today (see the quick example above), and `Option<T>`/`Result<T, E>` are real, first-class, pattern-matchable types in the language now — not just how the compiler happens to be written. What's still missing before it's a language you'd write a real program in:
