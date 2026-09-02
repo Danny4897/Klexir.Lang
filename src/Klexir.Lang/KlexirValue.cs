@@ -48,3 +48,20 @@ public sealed record RecordValue(string TypeName, IReadOnlyDictionary<string, Kl
     public override int GetHashCode() =>
         Fields.Aggregate(TypeName.GetHashCode(), (hash, field) => hash ^ (field.Key.GetHashCode() * 31 + field.Value.GetHashCode()));
 }
+
+/// <summary>A union value: which variant, plus its positional field values.</summary>
+public sealed record UnionValue(string VariantName, IReadOnlyList<KlexirValue> Fields) : KlexirValue
+{
+    public bool Equals(UnionValue? other) =>
+        other is not null && VariantName == other.VariantName && Fields.SequenceEqual(other.Fields);
+
+    public override int GetHashCode() =>
+        Fields.Aggregate(VariantName.GetHashCode(), (hash, field) => hash * 31 + field.GetHashCode());
+}
+
+/// <summary>
+/// A union constructor mid-currying: <c>Arity</c> fields declared, <c>AppliedArgs</c> supplied so far. Applying
+/// it (see <see cref="Evaluator"/>'s <c>ApplyClosure</c>) either yields another <see cref="ConstructorValue"/> with
+/// one more argument, or — once <c>AppliedArgs</c> reaches <c>Arity</c> — the finished <see cref="UnionValue"/>.
+/// </summary>
+public sealed record ConstructorValue(string VariantName, int Arity, IReadOnlyList<KlexirValue> AppliedArgs) : KlexirValue;

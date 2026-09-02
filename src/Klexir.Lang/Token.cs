@@ -49,6 +49,7 @@ public enum TokenType
     Filter,
     Fold,
     Record,
+    Union,
     Eof,
 }
 

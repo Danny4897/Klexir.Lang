@@ -60,6 +60,16 @@ public sealed record RecordType(string Name, IReadOnlyList<(string FieldName, Kl
     public override string ToString() => Name;
 }
 
+/// <summary>A user-defined union (sum) type. Nominal, same reasoning as <see cref="RecordType"/>.</summary>
+public sealed record UnionType(string Name, IReadOnlyList<(string VariantName, IReadOnlyList<KlexirType> FieldTypes)> Variants) : KlexirType
+{
+    public bool Equals(UnionType? other) => other is not null && Name == other.Name;
+
+    public override int GetHashCode() => Name.GetHashCode();
+
+    public override string ToString() => Name;
+}
+
 public abstract record TypedExpr(KlexirType Type);
 
 public sealed record TypedIntLiteral(long Value) : TypedExpr(KlexirType.Int);
@@ -114,3 +124,8 @@ public sealed record TypedFoldExpr(TypedExpr List, TypedExpr Initial, TypedExpr 
 public sealed record TypedRecordConstructExpr(string TypeName, IReadOnlyList<(string FieldName, TypedExpr Value)> Fields, KlexirType Type) : TypedExpr(Type);
 
 public sealed record TypedFieldAccessExpr(TypedExpr Receiver, string FieldName, KlexirType Type) : TypedExpr(Type);
+
+public sealed record TypedUnionDeclExpr(IReadOnlyList<(string VariantName, int Arity)> Constructors, TypedExpr Body, KlexirType Type) : TypedExpr(Type);
+
+public sealed record TypedMatchUnionExpr(
+    TypedExpr Scrutinee, IReadOnlyList<(string VariantName, IReadOnlyList<string> Binders, TypedExpr Body)> Arms, KlexirType Type) : TypedExpr(Type);

@@ -42,9 +42,7 @@ public sealed class TypeChecker
                 .Bind(value => Check(let.Body, WithBinding(environment, let.Name, value.Type))
                     .Bind(body => Result<TypedExpr>.Success(new TypedLetExpr(let.Name, value, body, body.Type)))),
 
-            FunExpr fun => Check(fun.Body, WithBinding(environment, fun.ParamName, fun.ParamType))
-                .Bind(body => Result<TypedExpr>.Success(
-                    new TypedFunExpr(fun.ParamName, fun.ParamType, body, new FunctionType(fun.ParamType, body.Type)))),
+            FunExpr fun => CheckFun(fun, environment),
 
             AppExpr app => Check(app.Function, environment)
                 .Bind(function => function.Type is FunctionType functionType
@@ -90,8 +88,107 @@ public sealed class TypeChecker
 
             FieldAccessExpr access => CheckFieldAccess(access, environment),
 
+            UnionDeclExpr decl => CheckUnionDecl(decl, environment),
+
+            MatchUnionExpr match => CheckMatchUnion(match, environment),
+
             _ => Result<TypedExpr>.Failure(Error.Create($"Unsupported expression node '{expr.GetType().Name}'.")),
         };
+
+    private static Result<TypedExpr> CheckUnionDecl(UnionDeclExpr decl, IReadOnlyDictionary<string, KlexirType> environment)
+    {
+        var unionType = new UnionType(decl.Name, decl.Variants);
+        var bodyEnvironment = WithBinding(environment, decl.Name, unionType);
+
+        var constructors = new List<(string VariantName, int Arity)>();
+
+        foreach (var (variantName, fieldTypes) in decl.Variants)
+        {
+            KlexirType constructorType = unionType;
+            for (var i = fieldTypes.Count - 1; i >= 0; i--)
+            {
+                constructorType = new FunctionType(fieldTypes[i], constructorType);
+            }
+
+            bodyEnvironment = WithBinding(bodyEnvironment, variantName, constructorType);
+            constructors.Add((variantName, fieldTypes.Count));
+        }
+
+        var bodyResult = Check(decl.Body, bodyEnvironment);
+        return bodyResult.IsFailure
+            ? bodyResult
+            : Result<TypedExpr>.Success(new TypedUnionDeclExpr(constructors, bodyResult.Value, bodyResult.Value.Type));
+    }
+
+    private static Result<TypedExpr> CheckMatchUnion(MatchUnionExpr match, IReadOnlyDictionary<string, KlexirType> environment)
+    {
+        var scrutineeResult = Check(match.Scrutinee, environment);
+        if (scrutineeResult.IsFailure)
+        {
+            return scrutineeResult;
+        }
+
+        var scrutineeType = ResolveType(scrutineeResult.Value.Type, environment);
+
+        if (scrutineeType is not UnionType unionType)
+        {
+            return Result<TypedExpr>.Failure(Error.Create(
+                $"'match' with variant patterns requires a union scrutinee, got {scrutineeType}."));
+        }
+
+        if (match.Arms.Count != unionType.Variants.Count)
+        {
+            return Result<TypedExpr>.Failure(Error.Create(
+                $"'{unionType.Name}' has {unionType.Variants.Count} variant(s), but {match.Arms.Count} arm(s) were given."));
+        }
+
+        KlexirType? resultType = null;
+        var typedArms = new List<(string VariantName, IReadOnlyList<string> Binders, TypedExpr Body)>();
+        var seenVariants = new HashSet<string>();
+
+        foreach (var (variantName, binders, body) in match.Arms)
+        {
+            if (!seenVariants.Add(variantName))
+            {
+                return Result<TypedExpr>.Failure(Error.Create($"Variant '{variantName}' matched more than once."));
+            }
+
+            var declaredVariant = unionType.Variants.FirstOrDefault(v => v.VariantName == variantName);
+            if (declaredVariant.VariantName is null)
+            {
+                return Result<TypedExpr>.Failure(Error.Create($"'{unionType.Name}' has no variant '{variantName}'."));
+            }
+
+            if (binders.Count != declaredVariant.FieldTypes.Count)
+            {
+                return Result<TypedExpr>.Failure(Error.Create(
+                    $"Variant '{variantName}' has {declaredVariant.FieldTypes.Count} field(s), but {binders.Count} binder(s) were given."));
+            }
+
+            var armEnvironment = environment;
+            for (var i = 0; i < binders.Count; i++)
+            {
+                armEnvironment = WithBinding(armEnvironment, binders[i], declaredVariant.FieldTypes[i]);
+            }
+
+            var bodyResult = Check(body, armEnvironment);
+            if (bodyResult.IsFailure)
+            {
+                return bodyResult;
+            }
+
+            resultType ??= bodyResult.Value.Type;
+            if (bodyResult.Value.Type != resultType)
+            {
+                return Result<TypedExpr>.Failure(Error.Create(
+                    $"Match arms must have the same type, got {resultType} and {bodyResult.Value.Type}."));
+            }
+
+            typedArms.Add((variantName, binders, bodyResult.Value));
+        }
+
+        return Result<TypedExpr>.Success(new TypedMatchUnionExpr(scrutineeResult.Value, typedArms, resultType!));
+    }
 
     private static Result<TypedExpr> CheckRecordConstruct(RecordConstructExpr construct, IReadOnlyDictionary<string, KlexirType> environment)
     {
@@ -402,10 +499,20 @@ public sealed class TypeChecker
         }
     }
 
+    private static Result<TypedExpr> CheckFun(FunExpr fun, IReadOnlyDictionary<string, KlexirType> environment)
+    {
+        var paramType = ResolveType(fun.ParamType, environment);
+
+        return Check(fun.Body, WithBinding(environment, fun.ParamName, paramType))
+            .Bind(body => Result<TypedExpr>.Success(new TypedFunExpr(fun.ParamName, paramType, body, new FunctionType(paramType, body.Type))));
+    }
+
     private static Result<TypedExpr> CheckLetRec(LetRecExpr letRec, IReadOnlyDictionary<string, KlexirType> environment)
     {
-        var functionType = new FunctionType(letRec.ParamType, letRec.ReturnType);
-        var bodyEnvironment = WithBinding(WithBinding(environment, letRec.Name, functionType), letRec.ParamName, letRec.ParamType);
+        var paramType = ResolveType(letRec.ParamType, environment);
+        var returnType = ResolveType(letRec.ReturnType, environment);
+        var functionType = new FunctionType(paramType, returnType);
+        var bodyEnvironment = WithBinding(WithBinding(environment, letRec.Name, functionType), letRec.ParamName, paramType);
 
         var bodyResult = Check(letRec.FunctionBody, bodyEnvironment);
         if (bodyResult.IsFailure)
@@ -413,10 +520,10 @@ public sealed class TypeChecker
             return bodyResult;
         }
 
-        if (bodyResult.Value.Type != letRec.ReturnType)
+        if (bodyResult.Value.Type != returnType)
         {
             return Result<TypedExpr>.Failure(Error.Create(
-                $"'{letRec.Name}' declared to return {letRec.ReturnType} but its body is {bodyResult.Value.Type}."));
+                $"'{letRec.Name}' declared to return {returnType} but its body is {bodyResult.Value.Type}."));
         }
 
         var letBodyResult = Check(letRec.LetBody, WithBinding(environment, letRec.Name, functionType));
@@ -426,8 +533,28 @@ public sealed class TypeChecker
         }
 
         return Result<TypedExpr>.Success(new TypedLetRecExpr(
-            letRec.Name, letRec.ParamName, letRec.ParamType, bodyResult.Value, functionType, letBodyResult.Value, letBodyResult.Value.Type));
+            letRec.Name, letRec.ParamName, paramType, bodyResult.Value, functionType, letBodyResult.Value, letBodyResult.Value.Type));
     }
+
+    /// <summary>
+    /// Resolves a type as written by <see cref="Parser.ParseTypeAnnotation"/> against the environment. Any name
+    /// that isn't a built-in keyword type parses as an empty-<c>Fields</c> <see cref="RecordType"/> placeholder,
+    /// since the parser can't know yet whether it names a record or a union — this looks that name up for real,
+    /// recursively through <see cref="OptionType"/>/<see cref="ResultType"/>/<see cref="ListType"/>/
+    /// <see cref="FunctionType"/>, so a resolved type compares correctly against one built directly (e.g. a
+    /// constructor's return type) instead of against the placeholder guess. A name that never resolves — an
+    /// undeclared type — is left as the placeholder and only surfaces as an error later, at first real use.
+    /// </summary>
+    private static KlexirType ResolveType(KlexirType type, IReadOnlyDictionary<string, KlexirType> environment) =>
+        type switch
+        {
+            RecordType placeholder when environment.TryGetValue(placeholder.Name, out var resolved) && resolved is RecordType or UnionType => resolved,
+            OptionType option => new OptionType(ResolveType(option.Element, environment)),
+            ResultType result => new ResultType(ResolveType(result.Ok, environment), ResolveType(result.Err, environment)),
+            ListType list => new ListType(ResolveType(list.Element, environment)),
+            FunctionType function => new FunctionType(ResolveType(function.Parameter, environment), ResolveType(function.Return, environment)),
+            _ => type,
+        };
 
     private static Result<TypedExpr> CheckBinaryOperands(BinaryOperator op, TypedExpr left, TypedExpr right)
     {

@@ -105,8 +105,54 @@ public sealed class Evaluator
                     ? Result<KlexirValue>.Success(value)
                     : Result<KlexirValue>.Failure(Error.Create($"Attempted to access field '{access.FieldName}' on a non-record value."))),
 
+            TypedUnionDeclExpr decl => EvaluateUnionDecl(decl, environment),
+
+            TypedMatchUnionExpr match => Evaluate(match.Scrutinee, environment)
+                .Bind(scrutinee => scrutinee is UnionValue union
+                    ? EvaluateMatchUnionArm(match.Arms, union, environment)
+                    : Result<KlexirValue>.Failure(Error.Create("Match scrutinee did not evaluate to a union value."))),
+
             _ => Result<KlexirValue>.Failure(Error.Create($"Unsupported typed node '{expr.GetType().Name}'.")),
         };
+
+    private static Result<KlexirValue> EvaluateUnionDecl(TypedUnionDeclExpr decl, IReadOnlyDictionary<string, KlexirValue> environment)
+    {
+        var bodyEnvironment = environment;
+
+        foreach (var (variantName, arity) in decl.Constructors)
+        {
+            KlexirValue constructorValue = arity == 0
+                ? new UnionValue(variantName, [])
+                : new ConstructorValue(variantName, arity, []);
+
+            bodyEnvironment = WithBinding(bodyEnvironment, variantName, constructorValue);
+        }
+
+        return Evaluate(decl.Body, bodyEnvironment);
+    }
+
+    private static Result<KlexirValue> EvaluateMatchUnionArm(
+        IReadOnlyList<(string VariantName, IReadOnlyList<string> Binders, TypedExpr Body)> arms,
+        UnionValue union, IReadOnlyDictionary<string, KlexirValue> environment)
+    {
+        foreach (var (variantName, binders, body) in arms)
+        {
+            if (variantName != union.VariantName)
+            {
+                continue;
+            }
+
+            var armEnvironment = environment;
+            for (var i = 0; i < binders.Count; i++)
+            {
+                armEnvironment = WithBinding(armEnvironment, binders[i], union.Fields[i]);
+            }
+
+            return Evaluate(body, armEnvironment);
+        }
+
+        return Result<KlexirValue>.Failure(Error.Create($"No match arm for variant '{union.VariantName}'."));
+    }
 
     private static Result<KlexirValue> EvaluateRecordConstruct(
         TypedRecordConstructExpr construct, IReadOnlyDictionary<string, KlexirValue> environment)
@@ -201,9 +247,21 @@ public sealed class Evaluator
     }
 
     private static Result<KlexirValue> ApplyClosure(KlexirValue function, KlexirValue argument) =>
-        function is ClosureValue closure
-            ? Evaluate(closure.Body, WithBinding(closure.Environment, closure.ParamName, argument))
-            : Result<KlexirValue>.Failure(Error.Create("Attempted to apply a non-function value."));
+        function switch
+        {
+            ClosureValue closure => Evaluate(closure.Body, WithBinding(closure.Environment, closure.ParamName, argument)),
+            ConstructorValue ctor => ApplyConstructor(ctor, argument),
+            _ => Result<KlexirValue>.Failure(Error.Create("Attempted to apply a non-function value.")),
+        };
+
+    private static Result<KlexirValue> ApplyConstructor(ConstructorValue ctor, KlexirValue argument)
+    {
+        var appliedArgs = new List<KlexirValue>(ctor.AppliedArgs) { argument };
+
+        return Result<KlexirValue>.Success(appliedArgs.Count == ctor.Arity
+            ? new UnionValue(ctor.VariantName, appliedArgs)
+            : new ConstructorValue(ctor.VariantName, ctor.Arity, appliedArgs));
+    }
 
     /// <summary>The Functor operation: transforms the value inside Some/Ok, leaves None/Err untouched.</summary>
     private static Result<KlexirValue> ApplyMap(KlexirValue container, KlexirValue mapper) =>

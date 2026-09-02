@@ -351,8 +351,83 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
         {
             TokenType.Some => ParseMatchOption(scrutinee.Value),
             TokenType.Ok => ParseMatchResult(scrutinee.Value),
-            _ => Result<Expr>.Failure(Error.Create($"Expected 'Some' or 'Ok' at {Current.Position}.")),
+            TokenType.Identifier => ParseMatchUnion(scrutinee.Value),
+            _ => Result<Expr>.Failure(Error.Create($"Expected 'Some', 'Ok', or a variant name at {Current.Position}.")),
         };
+    }
+
+    /// <summary>Parses <c>Variant1(binder, ...) => body1 | Variant2 => body2 | ...</c> for a union match.</summary>
+    private Result<Expr> ParseMatchUnion(Expr scrutinee)
+    {
+        var arms = new List<(string VariantName, IReadOnlyList<string> Binders, Expr Body)>();
+
+        while (true)
+        {
+            if (Current.Type != TokenType.Identifier)
+            {
+                return Result<Expr>.Failure(Error.Create($"Expected a variant name at {Current.Position}."));
+            }
+
+            var variantName = Current.Text;
+            _position++;
+
+            var binders = new List<string>();
+
+            if (Current.Type == TokenType.LParen)
+            {
+                _position++;
+
+                if (Current.Type != TokenType.RParen)
+                {
+                    while (true)
+                    {
+                        if (Current.Type != TokenType.Identifier)
+                        {
+                            return Result<Expr>.Failure(Error.Create($"Expected a binder name at {Current.Position}."));
+                        }
+
+                        binders.Add(Current.Text);
+                        _position++;
+
+                        if (Current.Type != TokenType.Comma)
+                        {
+                            break;
+                        }
+
+                        _position++;
+                    }
+                }
+
+                var closeParen = Expect(TokenType.RParen, "')'");
+                if (closeParen.IsFailure)
+                {
+                    return Result<Expr>.Failure(closeParen.Error);
+                }
+            }
+
+            var arrow = Expect(TokenType.FatArrow, "'=>'");
+            if (arrow.IsFailure)
+            {
+                return Result<Expr>.Failure(arrow.Error);
+            }
+
+            var body = ParseTop();
+            if (body.IsFailure)
+            {
+                return body;
+            }
+
+            arms.Add((variantName, binders, body.Value));
+
+            if (Current.Type != TokenType.Pipe)
+            {
+                break;
+            }
+
+            _position++;
+        }
+
+        return Result<Expr>.Success(new MatchUnionExpr(scrutinee, arms));
     }
 
     private Result<Expr> ParseMatchOption(Expr scrutinee)
@@ -861,7 +936,113 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
                 : Result<Expr>.Success(new RecordDeclExpr(decl.Value.Name, decl.Value.Fields, rest.Value));
         }
 
+        if (Current.Type == TokenType.Union)
+        {
+            var decl = ParseUnionDecl();
+            if (decl.IsFailure)
+            {
+                return Result<Expr>.Failure(decl.Error);
+            }
+
+            var semicolon = Expect(TokenType.Semicolon, "';' after a top-level 'union' declaration");
+            if (semicolon.IsFailure)
+            {
+                return Result<Expr>.Failure(semicolon.Error);
+            }
+
+            var rest = ParseProgramBody();
+            return rest.IsFailure
+                ? rest
+                : Result<Expr>.Success(new UnionDeclExpr(decl.Value.Name, decl.Value.Variants, rest.Value));
+        }
+
         return ParseTop();
+    }
+
+    /// <summary>Parses <c>union NAME { Variant1(Type1, Type2), Variant2, ... }</c> — top-level only.</summary>
+    private Result<(string Name, IReadOnlyList<(string VariantName, IReadOnlyList<KlexirType> FieldTypes)> Variants)> ParseUnionDecl()
+    {
+        _position++; // 'union'
+
+        if (Current.Type != TokenType.Identifier)
+        {
+            return Result<(string, IReadOnlyList<(string, IReadOnlyList<KlexirType>)>)>.Failure(
+                Error.Create($"Expected a union type name after 'union' at {Current.Position}."));
+        }
+
+        var name = Current.Text;
+        _position++;
+
+        var open = Expect(TokenType.LBrace, "'{'");
+        if (open.IsFailure)
+        {
+            return Result<(string, IReadOnlyList<(string, IReadOnlyList<KlexirType>)>)>.Failure(open.Error);
+        }
+
+        var variants = new List<(string VariantName, IReadOnlyList<KlexirType> FieldTypes)>();
+
+        if (Current.Type != TokenType.RBrace)
+        {
+            while (true)
+            {
+                if (Current.Type != TokenType.Identifier)
+                {
+                    return Result<(string, IReadOnlyList<(string, IReadOnlyList<KlexirType>)>)>.Failure(
+                        Error.Create($"Expected a variant name at {Current.Position}."));
+                }
+
+                var variantName = Current.Text;
+                _position++;
+
+                var fieldTypes = new List<KlexirType>();
+
+                if (Current.Type == TokenType.LParen)
+                {
+                    _position++;
+
+                    if (Current.Type != TokenType.RParen)
+                    {
+                        while (true)
+                        {
+                            var fieldType = ParseTypeAnnotation();
+                            if (fieldType.IsFailure)
+                            {
+                                return Result<(string, IReadOnlyList<(string, IReadOnlyList<KlexirType>)>)>.Failure(fieldType.Error);
+                            }
+
+                            fieldTypes.Add(fieldType.Value);
+
+                            if (Current.Type != TokenType.Comma)
+                            {
+                                break;
+                            }
+
+                            _position++;
+                        }
+                    }
+
+                    var closeParen = Expect(TokenType.RParen, "')'");
+                    if (closeParen.IsFailure)
+                    {
+                        return Result<(string, IReadOnlyList<(string, IReadOnlyList<KlexirType>)>)>.Failure(closeParen.Error);
+                    }
+                }
+
+                variants.Add((variantName, fieldTypes));
+
+                if (Current.Type != TokenType.Comma)
+                {
+                    break;
+                }
+
+                _position++;
+            }
+        }
+
+        var close = Expect(TokenType.RBrace, "'}'");
+        return close.IsFailure
+            ? Result<(string, IReadOnlyList<(string, IReadOnlyList<KlexirType>)>)>.Failure(close.Error)
+            : Result<(string, IReadOnlyList<(string, IReadOnlyList<KlexirType>)>)>.Success((name, variants));
     }
 
     /// <summary>Parses <c>record NAME { Field1: Type1, Field2: Type2, ... }</c> — top-level only, no inline form.</summary>

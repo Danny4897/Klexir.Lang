@@ -91,6 +91,7 @@ public sealed class Lexer(string source)
                     "filter" => TokenType.Filter,
                     "fold" => TokenType.Fold,
                     "record" => TokenType.Record,
+                    "union" => TokenType.Union,
                     _ => TokenType.Identifier,
                 };
                 tokens.Add(new Token(type, text, new SourcePosition(line, startColumn)));

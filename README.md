@@ -84,6 +84,14 @@ let isAdult = fun (u: User) => u.Age >= 18;
 isAdult (User { Age: 25, Id: 1 })   // true
 ```
 
+Records give you product types; `union` gives you sum types — a value that's exactly one of several shapes, checked exhaustively. A variant with fields constructs via ordinary curried application, no special syntax:
+
+```
+union Shape { Circle(Int), Rectangle(Int, Int) };
+let area = fun (s: Shape) => match s with Circle(r) => r * r * 3 | Rectangle(w, h) => w * h;
+area (Rectangle 3 5)   // 15
+```
+
 ---
 
 ## What's in the box
@@ -94,6 +102,7 @@ isAdult (User { Age: 25, Id: 1 })   // true
 | Parser | `Parser.ParseExpression()` | Recursive-descent; precedence `let`/`if`/`fun` → comparison → `+ -` → `* /` → application → primary |
 | Programs | `Parser.ParseProgram()` | A sequence of top-level `let`/`let rec` declarations — each ending in `;`, no `in` needed — followed by a final expression; desugars to the exact same nested-`let` AST, so the checker/evaluator need no changes |
 | Records | `record Name { Field: Type, ... };`, `Name { Field: expr, ... }`, `expr.Field` | User-defined product types — top-level declarations only. Construction checks field names/types by name (order doesn't matter); `RecordType` is nominal (equal by name), so a function parameter's record type resolves against the enclosing `record` declaration |
+| Unions | `union Name { Variant(T1, T2), Variant2, ... };`, `Variant 1 2`, `match e with Variant(a,b) => ... \| Variant2 => ...` | User-defined sum types — top-level only. A variant with fields constructs via ordinary curried application (no special call syntax); `match` is exhaustive over every variant, any order, one positional binder per field |
 | Types | `KlexirType` (`IntType`/`BoolType`/`FunctionType`) | A real type hierarchy, not a flat enum — functions have function types |
 | Type checker | `TypeChecker.Check(ast)` | Name resolution, arithmetic/comparison operand checks, `if`-branch unification, function application checks |
 | Closures | `FunExpr`, `AppExpr` | `fun (x: Int) => body`; application is left-associative juxtaposition (`f x y` = `(f x) y`), binds tighter than `* /` |
@@ -163,13 +172,13 @@ handleGetAdultAge 2   // 25 — adult, age passed through
 
 ## What can't Klexir do yet?
 
-A Klexir *program* — not just an expression — runs end to end today; `Option<T>`/`Result<T, E>` are real, first-class, pattern-matchable types; `String`/`List<T>`/user-defined `record`s cover real data, not just `Int`/`Bool`; and `KlexirInterop` bridges Klexir's `Option`/`Result` to the real MonadicSharp ones for a hosting .NET app. What's still missing before it's a language you'd write a real program in:
+A Klexir *program* — not just an expression — runs end to end today; `Option<T>`/`Result<T, E>` are real, first-class, pattern-matchable types; `String`/`List<T>`/user-defined `record`s and `union`s cover real data, not just `Int`/`Bool`; and `KlexirInterop` bridges Klexir's `Option`/`Result` to the real MonadicSharp ones for a hosting .NET app. What's still missing before it's a language you'd write a real program in:
 
 1. **A compiler to `Klexir.Runtime` bytecode.** The evaluator interprets the AST directly (tree-walking) — there's no IR, no codegen, no way to produce a standalone `.klx` bytecode file `Klexir.Runtime` can run without this repo present. (`Klexir.Runtime` also has no local-variable or jump opcodes yet, which a real codegen would need.)
-2. **Sum types and generics stay closed.** `record` gives you product types, but there's still no user-defined *union*/ADT (`Option`/`Result` are the only two, built into the checker) — and nothing in Klexir is generic: you can't write your own `Pair<A, B>` or a function that works over any `T`. No modules, no I/O, no negative integer literals either. A record type name that's never field-accessed or constructed also isn't validated against an actual `record` declaration — a typo in an unused parameter's type silently type-checks (see `RecordType`'s doc comment in `TypedExpr.cs`).
+2. **No generics, no recursive ADTs.** `record`/`union` give you product and sum types, but nothing in Klexir is generic — no user-defined `Pair<A, B>`, no function that works over any `T`. A `union` also can't reference its own type in a variant's field (no `Cons(Int, IntList)` inside `union IntList`'s own declaration) — self-reference resolves against whatever the name meant *before* this declaration, not the one being written, so a real linked-list/tree ADT isn't expressible yet. No modules, no I/O, no negative integer literals either. A record/union type name that's never actually constructed or matched on also isn't validated against a real declaration — a typo in an unused parameter's type silently type-checks (see `RecordType`'s doc comment in `TypedExpr.cs`).
 3. **Calling .NET *from* Klexir.** `KlexirInterop` bridges Klexir values *out* to real MonadicSharp types for a hosting app to consume — but Klexir code itself still can't call an arbitrary C# method or use a .NET library; the bridge is one-directional at the language boundary, not a general FFI.
 
-**If the goal is "build a real solution using Result-oriented, railway-style code today,"** [MonadicSharp](https://www.nuget.org/packages/MonadicSharp/) is still where you'd do it, in C#, in production, right now — Klexir.Lang can express the same `bind`/`map` chains and record-shaped data as actual language syntax and hand the result back to MonadicSharp via `KlexirInterop`, but a real compiler backend, sum types, and generics are still the bigger remaining project.
+**If the goal is "build a real solution using Result-oriented, railway-style code today,"** [MonadicSharp](https://www.nuget.org/packages/MonadicSharp/) is still where you'd do it, in C#, in production, right now — Klexir.Lang can express the same `bind`/`map` chains and record/union-shaped data as actual language syntax and hand the result back to MonadicSharp via `KlexirInterop`, but a real compiler backend, generics, and recursive ADTs are still the bigger remaining project.
 
 ## Requirements
 

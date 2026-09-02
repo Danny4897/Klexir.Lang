@@ -101,3 +101,19 @@ public sealed record RecordConstructExpr(string TypeName, IReadOnlyList<(string 
 
 /// <summary><c>receiver.FieldName</c>.</summary>
 public sealed record FieldAccessExpr(Expr Receiver, string FieldName) : Expr;
+
+/// <summary>
+/// <c>union NAME { Variant1(T1, T2), Variant2, ... };</c>, scoped over <see cref="Body"/> — top-level only, like
+/// <see cref="RecordDeclExpr"/>. Unlike a record, this doesn't disappear after type-checking: each variant name
+/// is bound to a (possibly curried) constructor, so evaluating this node has to inject real constructor values
+/// into the runtime environment before evaluating <see cref="Body"/>.
+/// </summary>
+public sealed record UnionDeclExpr(
+    string Name, IReadOnlyList<(string VariantName, IReadOnlyList<KlexirType> FieldTypes)> Variants, Expr Body) : Expr;
+
+/// <summary>
+/// <c>match scrutinee with Variant1(binder, ...) => body1 | Variant2 => body2 | ...</c> — exhaustive over every
+/// variant of the scrutinee's union type, each listed exactly once, in any order, with one positional binder per
+/// field.
+/// </summary>
+public sealed record MatchUnionExpr(Expr Scrutinee, IReadOnlyList<(string VariantName, IReadOnlyList<string> Binders, Expr Body)> Arms) : Expr;
