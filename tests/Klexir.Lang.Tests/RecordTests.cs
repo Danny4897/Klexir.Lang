@@ -19,6 +19,21 @@ public sealed class RecordTests
     }
 
     [Fact]
+    public void Evaluate_a_records_field_type_referencing_a_previously_declared_record()
+    {
+        // Regression: a field's type came straight from ParseTypeAnnotation's empty-Fields RecordType placeholder,
+        // never resolved against the environment — so Line.From's declared type didn't match a real Point's type.
+        var source = """
+            record Point { X: Int, Y: Int };
+            record Line { From: Point, To: Point };
+            let line = Line { From: Point { X: 0, Y: 0 }, To: Point { X: 3, Y: 4 } };
+            line.To.X
+            """;
+
+        Run(source).Should().Be(new IntValue(3));
+    }
+
+    [Fact]
     public void Evaluate_construction_does_not_care_about_field_order()
     {
         Run(Declare + "let u = User { Age: 30, Id: 2 }; u.Id").Should().Be(new IntValue(2));

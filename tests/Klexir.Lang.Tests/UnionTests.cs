@@ -56,6 +56,22 @@ public sealed class UnionTests
     }
 
     [Fact]
+    public void Evaluate_a_Result_whose_explicit_type_argument_is_a_previously_declared_union()
+    {
+        // Regression: 'Err<DealStage>(...)' parses DealStage into an empty-Fields RecordType placeholder (the
+        // parser can't know yet it's a union), and OkExpr/ErrExpr never resolved that against the environment —
+        // so this Ok/Err pair looked like two different Result types even though both printed as "DealStage".
+        // Found writing a real state-machine rule (Ok<String>(NextVariant) / Err<DealStage>("message")).
+        var source = TrafficLight + """
+            let advance = fun (l: TrafficLight) =>
+                match l with Red => Ok<String>(Green) | Yellow => Ok<String>(Red) | Green => Err<TrafficLight>("already green");
+            match advance Green with Ok(next) => 0 | Err(msg) => 1
+            """;
+
+        Run(source).Should().Be(new IntValue(1));
+    }
+
+    [Fact]
     public void Check_fails_when_a_match_omits_a_variant()
     {
         Check(TrafficLight + "match Red with Red => 0 | Yellow => 1").IsFailure.Should().BeTrue();

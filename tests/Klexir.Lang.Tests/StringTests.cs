@@ -71,6 +71,14 @@ public sealed class StringTests
         Run("let greeting = \"hi \" + \"there\" in greeting == \"hi there\"").Should().Be(new BoolValue(true));
     }
 
+    [Fact]
+    public void Evaluate_applies_a_function_to_a_string_argument_via_juxtaposition()
+    {
+        // Regression: ParseApplication's continuation lookahead once omitted TokenType.String, so 'f "x"' silently
+        // stopped taking arguments after 'f' instead of applying it — found writing a real Klexir program.
+        Run("let greet = fun (name: String) => \"hi \" + name in greet \"world\"").Should().Be(new StringValue("hi world"));
+    }
+
     private static TypedExpr CheckSuccessfully(string source)
     {
         var result = Check(source);

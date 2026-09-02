@@ -1239,7 +1239,13 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
 
         var expr = left.Value;
 
-        while (Current.Type is TokenType.Int or TokenType.True or TokenType.False or TokenType.Identifier or TokenType.LParen)
+        // Every token ParsePrimary can start with — kept in sync with it deliberately, since a token missing here
+        // doesn't fail to parse an argument, it silently stops taking arguments (found the hard way: applying a
+        // function to a String literal, 'f "x"', used to parse as just 'f' with the string ignored downstream).
+        while (Current.Type is TokenType.Int or TokenType.String or TokenType.True or TokenType.False
+            or TokenType.Identifier or TokenType.Some or TokenType.None or TokenType.Ok or TokenType.Err
+            or TokenType.Map or TokenType.Bind or TokenType.Filter or TokenType.Fold
+            or TokenType.LBracket or TokenType.LParen)
         {
             var arg = ParsePostfix();
             if (arg.IsFailure)

@@ -58,13 +58,13 @@ public sealed class TypeChecker
             SomeExpr some => Check(some.Value, environment)
                 .Bind(value => Result<TypedExpr>.Success(new TypedSomeExpr(value, new OptionType(value.Type)))),
 
-            NoneExpr none => Result<TypedExpr>.Success(new TypedNoneExpr(new OptionType(none.ElementType))),
+            NoneExpr none => Result<TypedExpr>.Success(new TypedNoneExpr(new OptionType(ResolveType(none.ElementType, environment)))),
 
             OkExpr ok => Check(ok.Value, environment)
-                .Bind(value => Result<TypedExpr>.Success(new TypedOkExpr(value, new ResultType(value.Type, ok.ErrType)))),
+                .Bind(value => Result<TypedExpr>.Success(new TypedOkExpr(value, new ResultType(value.Type, ResolveType(ok.ErrType, environment))))),
 
             ErrExpr err => Check(err.Value, environment)
-                .Bind(value => Result<TypedExpr>.Success(new TypedErrExpr(value, new ResultType(err.OkType, value.Type)))),
+                .Bind(value => Result<TypedExpr>.Success(new TypedErrExpr(value, new ResultType(ResolveType(err.OkType, environment), value.Type)))),
 
             MatchOptionExpr match => CheckMatchOption(match, environment),
 
@@ -76,13 +76,13 @@ public sealed class TypeChecker
 
             ListExpr list => CheckList(list, environment),
 
-            EmptyListExpr empty => Result<TypedExpr>.Success(new TypedEmptyListExpr(new ListType(empty.ElementType))),
+            EmptyListExpr empty => Result<TypedExpr>.Success(new TypedEmptyListExpr(new ListType(ResolveType(empty.ElementType, environment)))),
 
             FilterExpr filter => CheckFilter(filter, environment),
 
             FoldExpr fold => CheckFold(fold, environment),
 
-            RecordDeclExpr decl => Check(decl.Body, WithBinding(environment, decl.Name, new RecordType(decl.Name, decl.Fields))),
+            RecordDeclExpr decl => CheckRecordDecl(decl, environment),
 
             RecordConstructExpr construct => CheckRecordConstruct(construct, environment),
 
@@ -95,14 +95,32 @@ public sealed class TypeChecker
             _ => Result<TypedExpr>.Failure(Error.Create($"Unsupported expression node '{expr.GetType().Name}'.")),
         };
 
+    private static Result<TypedExpr> CheckRecordDecl(RecordDeclExpr decl, IReadOnlyDictionary<string, KlexirType> environment)
+    {
+        // Field types are resolved against the environment as it stood *before* this declaration, same as a
+        // union's variant field types below — a record can't reference its own name in a field's type yet.
+        var resolvedFields = decl.Fields
+            .Select(field => (field.FieldName, FieldType: ResolveType(field.FieldType, environment)))
+            .ToList();
+
+        var recordType = new RecordType(decl.Name, resolvedFields);
+        return Check(decl.Body, WithBinding(environment, decl.Name, recordType));
+    }
+
     private static Result<TypedExpr> CheckUnionDecl(UnionDeclExpr decl, IReadOnlyDictionary<string, KlexirType> environment)
     {
-        var unionType = new UnionType(decl.Name, decl.Variants);
+        var resolvedVariants = decl.Variants
+            .Select(variant => (variant.VariantName, FieldTypes: (IReadOnlyList<KlexirType>)variant.FieldTypes
+                .Select(fieldType => ResolveType(fieldType, environment))
+                .ToList()))
+            .ToList();
+
+        var unionType = new UnionType(decl.Name, resolvedVariants);
         var bodyEnvironment = WithBinding(environment, decl.Name, unionType);
 
         var constructors = new List<(string VariantName, int Arity)>();
 
-        foreach (var (variantName, fieldTypes) in decl.Variants)
+        foreach (var (variantName, fieldTypes) in resolvedVariants)
         {
             KlexirType constructorType = unionType;
             for (var i = fieldTypes.Count - 1; i >= 0; i--)
