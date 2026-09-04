@@ -1,0 +1,6 @@
+// let rec rende visibile il nome della funzione dentro il proprio corpo:
+// un 'let' normale non potrebbe richiamare se stesso.
+let rec fact = fun (n: Int): Int =>
+    if n < 2 then 1 else n * fact (n - 1);
+
+fact 6

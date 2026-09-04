@@ -1,0 +1,6 @@
+// I tipi primitivi di Klexir: Int, Bool, String.
+let age = 30;
+let isAdult = age >= 18;
+let greeting = "Ciao, " + "mondo!";
+
+if isAdult then greeting else "troppo giovane"

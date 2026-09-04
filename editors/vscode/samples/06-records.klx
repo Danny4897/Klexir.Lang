@@ -1,0 +1,7 @@
+// record = prodotto di campi con nome. Costruzione controllata per nome
+// (l'ordine non conta), .Campo per leggere.
+record User { Id: Int, Age: Int };
+
+let isAdult = fun (u: User) => u.Age >= 18;
+
+isAdult (User { Age: 25, Id: 1 })

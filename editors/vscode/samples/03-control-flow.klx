@@ -1,0 +1,8 @@
+// if/then/else e' un'espressione: entrambi i rami devono avere lo stesso tipo.
+// Klexir non ha ancora letterali negativi (vedi il README) -> "0 - 5" e' come si scrive -5.
+let classify = fun (n: Int) =>
+    if n < 0 then "negativo"
+    else if n == 0 then "zero"
+    else "positivo";
+
+classify (0 - 5)

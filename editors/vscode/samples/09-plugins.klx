@@ -1,0 +1,5 @@
+// I plugin aggiungono funzioni native (anche async: I/O vero) all'ambiente,
+// ma solo se l'host li abilita esplicitamente -- qui serve --plugin=clock.
+// Esegui questo file con: klexir run --plugin=clock 09-plugins.klx
+// (in VS Code: imposta klexir.plugins su ["clock"] nelle impostazioni, poi Ctrl+F5)
+delay (now true - now true + 5)

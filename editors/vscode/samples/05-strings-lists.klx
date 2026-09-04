@@ -1,0 +1,10 @@
+// String: letterali, concatenazione con +.
+let greeting = "Klexir" + " " + "rocks";
+
+// List<T>: letterali, map/filter/fold. Niente operatore % ancora,
+// quindi "pari" si controlla ricostruendo il numero da x / 2.
+let numbers = [1, 2, 3, 4, 5];
+let evens = filter(numbers, fun (x: Int) => x == (x / 2) * 2);
+let sum = fold(evens, 0, fun (acc: Int) => fun (x: Int) => acc + x);
+
+sum

@@ -17,9 +17,13 @@ No npm/build step — this is a plain declarative + CommonJS extension, loaded a
 Copy-Item -Recurse "editors\vscode" "$env:USERPROFILE\.vscode\extensions\klexir-lang-0.1.0"
 ```
 
+## Tutorial interattivo
+
+`Ctrl+Shift+P` → **Help: Open Walkthrough...** → **Impara Klexir** (o dalla pagina Get Started) apre un tour in 10 passi — dai tipi primitivi (`Int`/`Bool`/`String`) fino a un vero controller/service/repository composto con `bind`, passando per funzioni/closures, `if`, `Option`/`Result`, `String`/`List`, `record`, `union`, `let rec` e i plugin. Ogni passo apre un file `.klx` eseguibile (copiato in `<workspace>/klexir-tutorial/` alla prima apertura, cosi' le tue modifiche restano tue) e si segna completato non appena lo apri.
+
 ## Running a file
 
-Open any `.klx` file and hit `Ctrl+F5` (`Cmd+F5` on macOS), or run **Klexir: Run File** from the Command Palette. The extension looks for a `Klexir.Cli.csproj` anywhere in your open workspace automatically. If it can't find one — e.g. your `.klx` files live in a separate solution — set `klexir.cliProjectPath` in Settings to the full path of `Klexir.Cli.csproj`.
+Open any `.klx` file and hit `Ctrl+F5` (`Cmd+F5` on macOS), or run **Klexir: Run File** from the Command Palette. The extension looks for a `Klexir.Cli.csproj` anywhere in your open workspace automatically. If it can't find one — e.g. your `.klx` files live in a separate solution — set `klexir.cliProjectPath` in Settings to the full path of `Klexir.Cli.csproj`. Set `klexir.plugins` (e.g. `["clock"]`) to have `Ctrl+F5` pass `--plugin=<name>` automatically.
 
 ## What's highlighted
 
