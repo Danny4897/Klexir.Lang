@@ -18,6 +18,12 @@ public sealed class Evaluator
     public Task<Result<KlexirValue>> EvaluateAsync(TypedExpr expr) =>
         EvaluateAsync(expr, Array.Empty<IKlexirPlugin>());
 
+    /// <summary>Applies an already-evaluated function value to an argument — the same application logic <c>f x</c>
+    /// uses internally, exposed for a host that got a closure back from <see cref="Evaluate(TypedExpr)"/> (e.g. an
+    /// HTTP request handler) and needs to call it again for each new argument without re-evaluating the program.</summary>
+    public Task<Result<KlexirValue>> ApplyAsync(KlexirValue function, KlexirValue argument) =>
+        ApplyClosureAsync(function, argument);
+
     /// <summary>Evaluates <paramref name="expr"/> with the given plugins' functions bound into the initial value
     /// environment — see <see cref="IKlexirPlugin"/>. <paramref name="expr"/> should have been type-checked against
     /// the same plugin list via <see cref="TypeChecker.Check(Expr, IReadOnlyList{IKlexirPlugin})"/>.</summary>

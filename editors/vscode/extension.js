@@ -20,6 +20,7 @@ const LESSONS = [
   { id: "15", file: "15-mvp-service.klx", md: "15-mvp-service.md", title: "MVP 4/6: Service", subtitle: "orchestrazione via andThen" },
   { id: "16", file: "16-mvp-controller.klx", md: "16-mvp-controller.md", title: "MVP 5/6: Controller + plugin", subtitle: "Result -> risposta, timestamp reale" },
   { id: "17", file: "17-mvp-complete.klx", md: "17-mvp-complete.md", title: "MVP 6/6: Programma completo", subtitle: "checklist di clean code" },
+  { id: "18", file: "18-http-endpoint.klx", md: "18-http-endpoint.md", title: "Endpoint HTTP vero", subtitle: "klexir serve — I/O che guida Klexir" },
 ];
 
 const COMPLETED_KEY = "klexir.completedLessons";

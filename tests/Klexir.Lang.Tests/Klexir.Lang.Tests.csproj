@@ -12,5 +12,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Klexir.Lang\Klexir.Lang.csproj" />
+    <ProjectReference Include="..\..\src\Klexir.Cli\Klexir.Cli.csproj" />
   </ItemGroup>
 </Project>

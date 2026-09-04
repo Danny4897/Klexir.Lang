@@ -4,6 +4,12 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>klexir</AssemblyName>
     <RootNamespace>Klexir.Cli</RootNamespace>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>klexir</ToolCommandName>
+    <PackageId>Klexir.Cli</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Danny4897</Authors>
+    <Description>Klexir language CLI — run/compile .klx files, scaffold new projects.</Description>
   </PropertyGroup>
 
   <ItemGroup>
