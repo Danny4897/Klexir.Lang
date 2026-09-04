@@ -90,7 +90,7 @@ public sealed class Lexer(string source)
                     "else" => TokenType.Else,
                     "true" => TokenType.True,
                     "false" => TokenType.False,
-                    "fun" => TokenType.Fun,
+                    "func" => TokenType.Func,
                     "match" => TokenType.Match,
                     "with" => TokenType.With,
                     "Some" => TokenType.Some,

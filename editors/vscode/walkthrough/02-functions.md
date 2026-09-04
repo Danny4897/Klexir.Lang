@@ -1,10 +1,10 @@
 ## Funzioni e closures
 
-`fun (x: Int) => corpo` crea una funzione — il parametro vuole sempre un'annotazione di tipo esplicita, niente inferenza. L'applicazione e' currying "vera": una funzione a due argomenti e' una funzione che ne restituisce un'altra.
+`func(Int x) => corpo` crea una funzione — il parametro vuole sempre un'annotazione di tipo esplicita, niente inferenza. L'applicazione e' currying "vera": una funzione a due argomenti e' una funzione che ne restituisce un'altra.
 
 ```klexir
-let square = fun (x: Int) => x * x;
-let add = fun (x: Int) => fun (y: Int) => x + y;
+let square = func(Int x) => x * x;
+let add = func(Int x) => func(Int y) => x + y;
 
 let addFive = add 5;   // applicazione parziale: la closure ricorda x = 5
 

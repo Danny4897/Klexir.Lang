@@ -39,45 +39,60 @@ public sealed class ListTests
     [Fact]
     public void Evaluate_map_transforms_every_element()
     {
-        Run("map([1, 2, 3], fun (x: Int) => x * 2)")
+        Run("map([1, 2, 3], func(Int x) => x * 2)")
             .Should().Be(new ListValue([new IntValue(2), new IntValue(4), new IntValue(6)]));
     }
 
     [Fact]
     public void Evaluate_filter_keeps_only_matching_elements()
     {
-        Run("filter([1, 2, 3, 4], fun (x: Int) => x > 2)")
+        Run("filter([1, 2, 3, 4], func(Int x) => x > 2)")
             .Should().Be(new ListValue([new IntValue(3), new IntValue(4)]));
     }
 
     [Fact]
     public void Evaluate_filter_on_an_empty_list_returns_empty()
     {
-        Run("filter([]<Int>, fun (x: Int) => x > 2)").Should().Be(new ListValue([]));
+        Run("filter([]<Int>, func(Int x) => x > 2)").Should().Be(new ListValue([]));
     }
 
     [Fact]
     public void Evaluate_fold_reduces_the_list_to_a_single_value()
     {
-        Run("fold([1, 2, 3, 4], 0, fun (acc: Int) => fun (x: Int) => acc + x)").Should().Be(new IntValue(10));
+        Run("fold([1, 2, 3, 4], 0, func(Int acc) => func(Int x) => acc + x)").Should().Be(new IntValue(10));
     }
 
     [Fact]
     public void Evaluate_fold_on_an_empty_list_returns_the_initial_value()
     {
-        Run("fold([]<Int>, 99, fun (acc: Int) => fun (x: Int) => acc + x)").Should().Be(new IntValue(99));
+        Run("fold([]<Int>, 99, func(Int acc) => func(Int x) => acc + x)").Should().Be(new IntValue(99));
     }
 
     [Fact]
     public void Check_fails_when_map_function_does_not_match_the_list_element_type()
     {
-        Check("map([1, 2, 3], fun (x: Bool) => x)").IsFailure.Should().BeTrue();
+        Check("map([1, 2, 3], func(Bool x) => x)").IsFailure.Should().BeTrue();
     }
 
     [Fact]
     public void Check_fails_when_filter_predicate_does_not_return_Bool()
     {
-        Check("filter([1, 2, 3], fun (x: Int) => x)").IsFailure.Should().BeTrue();
+        Check("filter([1, 2, 3], func(Int x) => x)").IsFailure.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_a_comparison_following_fold_in_the_same_expression()
+    {
+        // Regression: map/bind/filter/fold used to be special-cased in ParseTop, returning before any trailing
+        // operator got a chance to attach — 'fold(...) > 0' failed to parse entirely.
+        Run("fold([1, 2, 3], 0, func(Int acc) => func(Int x) => acc + x) > 5").Should().Be(new BoolValue(true));
+    }
+
+    [Fact]
+    public void Evaluate_arithmetic_following_map_in_the_same_expression()
+    {
+        Run("fold(map([1, 2], func(Int x) => x * 2), 0, func(Int acc) => func(Int x) => acc + x) + 1")
+            .Should().Be(new IntValue(7));
     }
 
     private static TypedExpr CheckSuccessfully(string source)

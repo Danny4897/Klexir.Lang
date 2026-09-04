@@ -1,17 +1,17 @@
 // Option<T>: "trovato o non trovato", senza dire il perche'.
-let findUser = fun (id: Int) =>
+let findUser = func(Int id) =>
     if id == 1 then Some(42) else None<Int>;
 
 // Result<T, E>: come Option, ma con un errore informativo quando manca.
-let toResult = fun (id: Int) =>
+let toResult = func(Int id) =>
     match findUser id with Some(x) => Ok<Bool>(x) | None => Err<Int>(true);
 
-let checkPositive = fun (x: Int) =>
+let checkPositive = func(Int x) =>
     if x > 0 then Ok<Bool>(x) else Err<Int>(false);
 
 // andThen incatena due passi che possono fallire, letto come una frase:
 // "prova toResult, POI checkPositive" -- se uno fallisce, il resto non gira nemmeno.
 // E' zucchero sintattico su bind(toResult id, checkPositive): stesso identico comportamento.
-let pipeline = fun (id: Int) => toResult id andThen checkPositive;
+let pipeline = func(Int id) => toResult id andThen checkPositive;
 
 match pipeline 1 with Ok(x) => x | Err(e) => 0 - 1

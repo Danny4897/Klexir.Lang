@@ -2,7 +2,7 @@
   "name": "klexir-lang",
   "displayName": "Klexir Language Support",
   "description": "Syntax highlighting, a Run command, and an interactive tutorial for Klexir (.klx) files.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "danny4897",
   "engines": {
     "vscode": "^1.85.0"
@@ -103,6 +103,16 @@
         "when": "editorLangId == klexir"
       }
     ],
+    "configurationDefaults": {
+      "editor.tokenColorCustomizations": {
+        "textMateRules": [
+          {
+            "scope": ["constant.language.klexir.result-ok", "constant.language.klexir.result-err"],
+            "settings": { "foreground": "#FFD700" }
+          }
+        ]
+      }
+    },
     "configuration": {
       "title": "Klexir",
       "properties": {

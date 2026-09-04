@@ -76,7 +76,7 @@ public sealed class StringTests
     {
         // Regression: ParseApplication's continuation lookahead once omitted TokenType.String, so 'f "x"' silently
         // stopped taking arguments after 'f' instead of applying it — found writing a real Klexir program.
-        Run("let greet = fun (name: String) => \"hi \" + name in greet \"world\"").Should().Be(new StringValue("hi world"));
+        Run("let greet = func(String name) => \"hi \" + name in greet \"world\"").Should().Be(new StringValue("hi world"));
     }
 
     private static TypedExpr CheckSuccessfully(string source)

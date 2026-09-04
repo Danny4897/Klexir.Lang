@@ -3,7 +3,7 @@
 ```
 // hello.klx
 record User { Id: Int, Age: Int };
-let isAdult = fun (u: User) => u.Age >= 18;
+let isAdult = func(User u) => u.Age >= 18;
 isAdult (User { Id: 1, Age: 25 })
 ```
 
@@ -16,14 +16,14 @@ Unions are sum types — a value that's exactly one of several variants, checked
 
 ```
 union Shape { Circle(Int), Rectangle(Int, Int) };
-let area = fun (s: Shape) => match s with Circle(r) => r * r * 3 | Rectangle(w, h) => w * h;
+let area = func(Shape s) => match s with Circle(r) => r * r * 3 | Rectangle(w, h) => w * h;
 area (Rectangle 3 5)   // 15 — a variant with fields constructs via ordinary curried application
 ```
 
 And `Option<T>`/`Result<T, E>` are real, pattern-matchable types with `map`/`bind` for railway-oriented composition:
 
 ```
-match bind(Ok<Bool>(5), fun (x: Int) => if x > 0 then Ok<Bool>(x * 2) else Err<Int>(false))
+match bind(Ok<Bool>(5), func(Int x) => if x > 0 then Ok<Bool>(x * 2) else Err<Int>(false))
 with Ok(x) => x | Err(e) => 0
 ```
 

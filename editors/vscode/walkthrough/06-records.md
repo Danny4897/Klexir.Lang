@@ -5,7 +5,7 @@
 ```klexir
 record User { Id: Int, Age: Int };
 
-let isAdult = fun (u: User) => u.Age >= 18;
+let isAdult = func(User u) => u.Age >= 18;
 
 isAdult (User { Age: 25, Id: 1 })
 ```

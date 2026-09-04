@@ -5,7 +5,7 @@
 ```klexir
 union Shape { Circle(Int), Rectangle(Int, Int) };
 
-let area = fun (s: Shape) =>
+let area = func(Shape s) =>
     match s with Circle(r) => r * r * 3 | Rectangle(w, h) => w * h;
 
 area (Rectangle 3 5)

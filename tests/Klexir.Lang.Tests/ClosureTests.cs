@@ -9,7 +9,7 @@ public sealed class ClosureTests
     [Fact]
     public void ParseExpression_parses_a_function_literal()
     {
-        var ast = ParseSuccessfully("fun (x: Int) => x + 1");
+        var ast = ParseSuccessfully("func(Int x) => x + 1");
 
         ast.Should().Be(new FunExpr(
             "x", KlexirType.Int, new BinaryExpr(BinaryOperator.Add, new Identifier("x"), new IntLiteral(1))));
@@ -35,7 +35,7 @@ public sealed class ClosureTests
     [Fact]
     public void Check_types_a_function_literal_as_a_function_type()
     {
-        var typed = CheckSuccessfully("fun (x: Int) => x + 1");
+        var typed = CheckSuccessfully("func(Int x) => x + 1");
 
         typed.Type.Should().Be(new FunctionType(KlexirType.Int, KlexirType.Int));
     }
@@ -43,7 +43,7 @@ public sealed class ClosureTests
     [Fact]
     public void Check_types_a_function_application_by_the_functions_return_type()
     {
-        var typed = CheckSuccessfully("let f = fun (x: Int) => x + 1 in f 5");
+        var typed = CheckSuccessfully("let f = func(Int x) => x + 1 in f 5");
 
         typed.Type.Should().Be(KlexirType.Int);
     }
@@ -57,7 +57,7 @@ public sealed class ClosureTests
     [Fact]
     public void Check_fails_applying_a_function_to_an_argument_of_the_wrong_type()
     {
-        Check("let f = fun (x: Int) => x in f true").IsFailure.Should().BeTrue();
+        Check("let f = func(Int x) => x in f true").IsFailure.Should().BeTrue();
     }
 
     private static Expr ParseSuccessfully(string source)

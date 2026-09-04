@@ -26,7 +26,7 @@ public sealed class UnionTests
     public void Evaluate_a_function_over_a_zero_field_variant_union()
     {
         var source = TrafficLight + """
-            let next = fun (l: TrafficLight) => match l with Red => Green | Yellow => Red | Green => Yellow;
+            let next = func(TrafficLight l) => match l with Red => Green | Yellow => Red | Green => Yellow;
             match next Red with Red => 0 | Yellow => 1 | Green => 2
             """;
 
@@ -37,7 +37,7 @@ public sealed class UnionTests
     public void Evaluate_constructs_a_single_field_variant_via_plain_application()
     {
         var source = Shape + """
-            let area = fun (s: Shape) => match s with Circle(r) => r * r * 3 | Rectangle(w, h) => w * h;
+            let area = func(Shape s) => match s with Circle(r) => r * r * 3 | Rectangle(w, h) => w * h;
             area (Circle 4)
             """;
 
@@ -48,7 +48,7 @@ public sealed class UnionTests
     public void Evaluate_constructs_a_multi_field_variant_via_curried_application()
     {
         var source = Shape + """
-            let area = fun (s: Shape) => match s with Circle(r) => r * r * 3 | Rectangle(w, h) => w * h;
+            let area = func(Shape s) => match s with Circle(r) => r * r * 3 | Rectangle(w, h) => w * h;
             area (Rectangle 3 5)
             """;
 
@@ -63,7 +63,7 @@ public sealed class UnionTests
         // so this Ok/Err pair looked like two different Result types even though both printed as "DealStage".
         // Found writing a real state-machine rule (Ok<String>(NextVariant) / Err<DealStage>("message")).
         var source = TrafficLight + """
-            let advance = fun (l: TrafficLight) =>
+            let advance = func(TrafficLight l) =>
                 match l with Red => Ok<String>(Green) | Yellow => Ok<String>(Red) | Green => Err<TrafficLight>("already green");
             match advance Green with Ok(next) => 0 | Err(msg) => 1
             """;

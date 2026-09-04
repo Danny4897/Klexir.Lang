@@ -29,7 +29,7 @@ public sealed class ProgramTests
     public void ParseProgram_supports_top_level_let_rec_declarations()
     {
         var ast = ParseSuccessfully("""
-            let rec fact = fun (n: Int): Int => if n < 2 then 1 else n * fact (n - 1);
+            let rec fact = func(Int n): Int => if n < 2 then 1 else n * fact (n - 1);
             fact 5
             """);
 
@@ -59,13 +59,13 @@ public sealed class ProgramTests
     public void Evaluate_a_layered_style_program_end_to_end()
     {
         const string program = """
-            let findUserAge = fun (userId: Int) =>
+            let findUserAge = func(Int userId) =>
                 if userId == 1 then Some(17) else if userId == 2 then Some(25) else None<Int>;
-            let toLookupResult = fun (age: Option<Int>) =>
+            let toLookupResult = func(Option<Int> age) =>
                 match age with Some(x) => Ok<Int>(x) | None => Err<Int>(1);
-            let checkAdult = fun (age: Int) =>
+            let checkAdult = func(Int age) =>
                 if age >= 18 then Ok<Int>(age) else Err<Int>(2);
-            let getAdultAge = fun (userId: Int) =>
+            let getAdultAge = func(Int userId) =>
                 bind(toLookupResult (findUserAge userId), checkAdult);
             match getAdultAge 2 with Ok(age) => age | Err(code) => code
             """;

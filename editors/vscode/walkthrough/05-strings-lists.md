@@ -6,8 +6,8 @@
 let greeting = "Klexir" + " " + "rocks";
 
 let numbers = [1, 2, 3, 4, 5];
-let evens = filter(numbers, fun (x: Int) => x == (x / 2) * 2);
-let sum = fold(evens, 0, fun (acc: Int) => fun (x: Int) => acc + x);
+let evens = filter(numbers, func(Int x) => x == (x / 2) * 2);
+let sum = fold(evens, 0, func(Int acc) => func(Int x) => acc + x);
 
 sum
 ```

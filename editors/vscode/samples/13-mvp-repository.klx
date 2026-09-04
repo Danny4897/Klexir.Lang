@@ -5,9 +5,8 @@ let existingUsers = [
     User { CodiceFiscale: "VRDLGU90B02F205X", Age: 34 }
 ];
 
-let existsInRepo = fun (cf: String) =>
-    let matches = fold(filter(existingUsers, fun (u: User) => u.CodiceFiscale == cf), 0,
-        fun (acc: Int) => fun (u: User) => acc + 1) in
-    matches > 0;
+let existsInRepo = func(String cf) =>
+    fold(filter(existingUsers, func(User u) => u.CodiceFiscale == cf), 0,
+        func(Int acc) => func(User u) => acc + 1) > 0;
 
 if existsInRepo "RSSMRA80A01H501U" then 1 else 0

@@ -66,25 +66,25 @@ public sealed class CompilerTests
     [Fact]
     public void Compile_and_run_a_non_capturing_closure_application()
     {
-        RunCompiled("let f = fun (x: Int) => x + 1 in f 41").Should().Be(42);
+        RunCompiled("let f = func(Int x) => x + 1 in f 41").Should().Be(42);
     }
 
     [Fact]
     public void Compile_and_run_a_capturing_closure()
     {
-        RunCompiled("let x = 10 in let f = fun (y: Int) => x + y in f 5").Should().Be(15);
+        RunCompiled("let x = 10 in let f = func(Int y) => x + y in f 5").Should().Be(15);
     }
 
     [Fact]
     public void Compile_and_run_currying()
     {
-        RunCompiled("let add = fun (x: Int) => fun (y: Int) => x + y in add 3 4").Should().Be(7);
+        RunCompiled("let add = func(Int x) => func(Int y) => x + y in add 3 4").Should().Be(7);
     }
 
     [Fact]
     public void Compile_and_run_recursive_factorial_via_let_rec()
     {
-        RunCompiled("let rec fact = fun (n: Int): Int => if n < 2 then 1 else n * fact (n - 1) in fact 5").Should().Be(120);
+        RunCompiled("let rec fact = func(Int n): Int => if n < 2 then 1 else n * fact (n - 1) in fact 5").Should().Be(120);
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public sealed class CompilerTests
     {
         // proves let rec's closure can both recurse via its own handle AND read an outer capture.
         RunCompiled(
-            "let step = 2 in let rec countUp = fun (n: Int): Int => if n >= 10 then n else countUp (n + step) in countUp 0")
+            "let step = 2 in let rec countUp = func(Int n): Int => if n >= 10 then n else countUp (n + step) in countUp 0")
             .Should().Be(10);
     }
 

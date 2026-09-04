@@ -104,7 +104,7 @@ public sealed class KlexirInteropTests
     public void Interop_round_trips_a_Klexir_program_result_through_MonadicSharp_and_back()
     {
         var tokens = new Lexer(
-            "let safeDiv = fun (n: Int) => if n == 0 then Err<Int>(true) else Ok<Bool>(100 / n) in safeDiv 4")
+            "let safeDiv = func(Int n) => if n == 0 then Err<Int>(true) else Ok<Bool>(100 / n) in safeDiv 4")
             .Tokenize();
         var ast = new Parser(tokens.Value).ParseExpression();
         var typed = new TypeChecker().Check(ast.Value);

@@ -15,7 +15,7 @@ public enum TokenType
     Else,
     True,
     False,
-    Fun,
+    Func,
     Equals,
     EqualsEquals,
     FatArrow,

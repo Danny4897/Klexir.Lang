@@ -43,8 +43,8 @@ public sealed class AndThenTests
     public void Evaluate_runs_a_validation_pipeline_short_circuiting_on_the_first_error()
     {
         const string source = """
-            let checkAdult = fun (age: Int) => if age >= 18 then Ok<Bool>(age) else Err<Int>(true) in
-            let checkPositive = fun (age: Int) => if age > 0 then Ok<Bool>(age) else Err<Int>(false) in
+            let checkAdult = func(Int age) => if age >= 18 then Ok<Bool>(age) else Err<Int>(true) in
+            let checkPositive = func(Int age) => if age > 0 then Ok<Bool>(age) else Err<Int>(false) in
             match (checkAdult 25 andThen checkPositive) with Ok(x) => x | Err(e) => 0 - 1
             """;
 
@@ -55,8 +55,8 @@ public sealed class AndThenTests
     public void Evaluate_short_circuits_andThen_at_the_first_failing_step()
     {
         const string source = """
-            let checkAdult = fun (age: Int) => if age >= 18 then Ok<Bool>(age) else Err<Int>(true) in
-            let checkPositive = fun (age: Int) => if age > 0 then Ok<Bool>(age) else Err<Int>(false) in
+            let checkAdult = func(Int age) => if age >= 18 then Ok<Bool>(age) else Err<Int>(true) in
+            let checkPositive = func(Int age) => if age > 0 then Ok<Bool>(age) else Err<Int>(false) in
             match (checkAdult 5 andThen checkPositive) with Ok(x) => x | Err(e) => 0 - 1
             """;
 

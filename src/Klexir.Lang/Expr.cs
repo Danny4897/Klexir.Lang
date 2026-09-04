@@ -40,7 +40,7 @@ public sealed record FunExpr(string ParamName, KlexirType ParamType, Expr Body) 
 public sealed record AppExpr(Expr Function, Expr Argument) : Expr;
 
 /// <summary>
-/// <c>let rec name = fun (param: ParamType): ReturnType => functionBody in letBody</c>. Unlike <see cref="LetExpr"/>,
+/// <c>let rec name = func(ParamType param): ReturnType => functionBody in letBody</c>. Unlike <see cref="LetExpr"/>,
 /// <c>name</c> is visible inside <c>functionBody</c> too, so the function can call itself. A recursive binding's
 /// return type must be written explicitly (no inference), since checking the body needs the binding's type
 /// before the body itself has been checked.

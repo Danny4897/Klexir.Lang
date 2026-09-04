@@ -51,7 +51,7 @@ public sealed class RecordTests
     public void Check_lets_a_function_take_a_record_parameter_and_access_its_fields()
     {
         var source = Declare + """
-            let isAdult = fun (u: User) => u.Age >= 18;
+            let isAdult = func(User u) => u.Age >= 18;
             isAdult (User { Id: 1, Age: 25 })
             """;
 

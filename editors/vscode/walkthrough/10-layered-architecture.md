@@ -4,25 +4,25 @@ Tre livelli, ciascuno con una sola responsabilita' e il proprio confine `Result`
 
 ```klexir
 // Repository: possiede i dati, restituisce Option -- "trovato o no", senza un perche'.
-let findUserAge = fun (userId: Int) =>
+let findUserAge = func(Int userId) =>
     if userId == 1 then Some(17)        // utente noto, minorenne
     else if userId == 2 then Some(25)   // utente noto, maggiorenne
     else None<Int>;                     // utente sconosciuto
 
 // Adapter: l'Option del repository diventa un Result per il service layer, con un errore vero.
-let toLookupResult = fun (age: Option<Int>) =>
+let toLookupResult = func(Option<Int> age) =>
     match age with Some(x) => Ok<Int>(x) | None => Err<Int>(1);   // 1 = utente non trovato
 
 // Service: la regola di business, indifferente a da dove viene il valore.
-let checkAdult = fun (age: Int) =>
+let checkAdult = func(Int age) =>
     if age >= 18 then Ok<Int>(age) else Err<Int>(2);              // 2 = minorenne
 
 // Service: orchestratore -- bind salta a Err(1) senza mai chiamare checkAdult.
-let getAdultAge = fun (userId: Int) =>
+let getAdultAge = func(Int userId) =>
     bind(toLookupResult (findUserAge userId), checkAdult);
 
 // Controller: l'unico livello a cui e' permesso trasformare un Result in una risposta semplice.
-let handleGetAdultAge = fun (userId: Int) =>
+let handleGetAdultAge = func(Int userId) =>
     match getAdultAge userId with Ok(age) => age | Err(code) => code;
 
 handleGetAdultAge 2   // 25 -- maggiorenne, l'eta' passa cosi' com'e'

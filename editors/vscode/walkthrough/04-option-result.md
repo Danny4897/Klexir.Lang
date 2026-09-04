@@ -3,17 +3,17 @@
 `Option<T>` (`Some`/`None`) dice "trovato o no"; `Result<T, E>` (`Ok`/`Err`) aggiunge un errore vero. Sono tipi di prima classe, non una convenzione — con `match` esaustivo e `andThen` per incatenare passi senza controlli manuali, leggendo il codice come una frase.
 
 ```klexir
-let findUser = fun (id: Int) =>
+let findUser = func(Int id) =>
     if id == 1 then Some(42) else None<Int>;
 
-let toResult = fun (id: Int) =>
+let toResult = func(Int id) =>
     match findUser id with Some(x) => Ok<Bool>(x) | None => Err<Int>(true);
 
-let checkPositive = fun (x: Int) =>
+let checkPositive = func(Int x) =>
     if x > 0 then Ok<Bool>(x) else Err<Int>(false);
 
 // "prova toResult, POI checkPositive" -- se il primo fallisce, il secondo non gira nemmeno.
-let pipeline = fun (id: Int) => toResult id andThen checkPositive;
+let pipeline = func(Int id) => toResult id andThen checkPositive;
 
 match pipeline 1 with Ok(x) => x | Err(e) => 0 - 1
 ```

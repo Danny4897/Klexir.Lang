@@ -29,20 +29,20 @@ public sealed class EvaluatorTests
     [Fact]
     public void Evaluate_applies_a_closure()
     {
-        Run("let double = fun (x: Int) => x * 2 in double 21").Should().Be(new IntValue(42));
+        Run("let double = func(Int x) => x * 2 in double 21").Should().Be(new IntValue(42));
     }
 
     [Fact]
     public void Evaluate_supports_currying_via_captured_environment()
     {
         // 'add' returns a closure that captures x=3; the returned closure is then applied to y=4.
-        Run("let add = fun (x: Int) => fun (y: Int) => x + y in add 3 4").Should().Be(new IntValue(7));
+        Run("let add = func(Int x) => func(Int y) => x + y in add 3 4").Should().Be(new IntValue(7));
     }
 
     [Fact]
     public void Evaluate_two_calls_to_the_same_curried_function_do_not_share_captured_state()
     {
-        Run("let add = fun (x: Int) => fun (y: Int) => x + y in (add 3 4) + (add 10 1)").Should().Be(new IntValue(18));
+        Run("let add = func(Int x) => func(Int y) => x + y in (add 3 4) + (add 10 1)").Should().Be(new IntValue(18));
     }
 
     [Fact]
@@ -54,7 +54,7 @@ public sealed class EvaluatorTests
     [Fact]
     public void Evaluate_end_to_end_from_source_text_through_lexer_parser_type_checker_and_evaluator()
     {
-        Run("let square = fun (x: Int) => x * x in if square 5 > 20 then square 5 else 0")
+        Run("let square = func(Int x) => x * x in if square 5 > 20 then square 5 else 0")
             .Should().Be(new IntValue(25));
     }
 

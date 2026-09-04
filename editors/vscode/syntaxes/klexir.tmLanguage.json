@@ -54,11 +54,12 @@
       ]
     },
     "parameters": {
-      "comment": "The parameter name in fun (name: Type) — colored like C# parameters, separately from its type.",
+      "comment": "func(Type name, ...) — a capitalized type immediately followed by a lowercase identifier only ever occurs in a parameter list, so this pins the identifier as variable.parameter while re-running the type through #primitive-types/#types.",
       "patterns": [
         {
-          "match": "([(,]\\s*)([a-zA-Z_][A-Za-z0-9_]*)(\\s*:)",
+          "match": "\\b([A-Z][A-Za-z0-9_]*(?:<[^<>]*>)?)\\s+([a-z_][A-Za-z0-9_]*)\\b",
           "captures": {
+            "1": { "patterns": [{ "include": "#primitive-types" }, { "include": "#types" }] },
             "2": { "name": "variable.parameter.klexir" }
           }
         }
@@ -68,7 +69,7 @@
       "patterns": [
         {
           "name": "keyword.control.klexir",
-          "match": "\\b(let|rec|in|if|then|else|fun|match|with|record|union)\\b"
+          "match": "\\b(let|rec|in|if|then|else|func|match|with|record|union)\\b"
         },
         {
           "name": "keyword.other.klexir",
@@ -77,14 +78,23 @@
       ]
     },
     "language-constants": {
+      "comment": "Ok/Err get their own scopes (not shared with Some/None) so a theme/user override can color the Result constructors distinctly — see package.json's configurationDefaults for the default yellow.",
       "patterns": [
         {
-          "name": "constant.language.klexir.success",
-          "match": "\\b(Some|Ok)\\b"
+          "name": "constant.language.klexir.result-ok",
+          "match": "\\bOk\\b"
         },
         {
-          "name": "constant.language.klexir.failure",
-          "match": "\\b(None|Err)\\b"
+          "name": "constant.language.klexir.result-err",
+          "match": "\\bErr\\b"
+        },
+        {
+          "name": "constant.language.klexir.option-some",
+          "match": "\\bSome\\b"
+        },
+        {
+          "name": "constant.language.klexir.option-none",
+          "match": "\\bNone\\b"
         }
       ]
     },

@@ -9,21 +9,20 @@ let existingUsers = [
     User { CodiceFiscale: "RSSMRA80A01H501U", Age: 45 }
 ];
 
-let existsInRepo = fun (cf: String) =>
-    let matches = fold(filter(existingUsers, fun (u: User) => u.CodiceFiscale == cf), 0,
-        fun (acc: Int) => fun (u: User) => acc + 1) in
-    matches > 0;
+let existsInRepo = func(String cf) =>
+    fold(filter(existingUsers, func(User u) => u.CodiceFiscale == cf), 0,
+        func(Int acc) => func(User u) => acc + 1) > 0;
 
-let checkAdult = fun (u: User) =>
+let checkAdult = func(User u) =>
     if u.Age >= 18 then Ok<Int>(u) else Err<User>(1);
 
-let checkCodiceFiscale = fun (u: User) =>
+let checkCodiceFiscale = func(User u) =>
     if u.CodiceFiscale == "" then Err<User>(2) else Ok<Int>(u);
 
-let checkNotInDb = fun (u: User) =>
+let checkNotInDb = func(User u) =>
     if existsInRepo u.CodiceFiscale then Err<User>(3) else Ok<Int>(u);
 
-let validateNewUser = fun (u: User) =>
+let validateNewUser = func(User u) =>
     checkAdult u andThen checkCodiceFiscale andThen checkNotInDb;
 
 match validateNewUser (User { CodiceFiscale: "NWUSER01A01A000X", Age: 30 }) with Ok(x) => 0 | Err(code) => code

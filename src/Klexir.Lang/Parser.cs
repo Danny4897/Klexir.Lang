@@ -32,12 +32,12 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
             TokenType.Let when Peek(1).Type == TokenType.Rec => ParseLetRec(),
             TokenType.Let => ParseLet(),
             TokenType.If => ParseIf(),
-            TokenType.Fun => ParseFun(),
+            TokenType.Func => ParseFunc(),
             TokenType.Match => ParseMatch(),
-            TokenType.Map => ParseMapOrBind(isBind: false),
-            TokenType.Bind => ParseMapOrBind(isBind: true),
-            TokenType.Filter => ParseFilter(),
-            TokenType.Fold => ParseFold(),
+            // map/bind/filter/fold are NOT special-cased here on purpose: ParsePrimary already parses them (they're
+            // self-delimiting via their own parens, like a function call), so falling through to the normal
+            // precedence chain lets 'fold(...) > 0' or 'map(...) + 1' parse — handling them here too used to shadow
+            // that and silently return before any trailing operator got a chance to attach.
             _ => ParseAndThen(),
         };
 
@@ -66,9 +66,15 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
                 header.Value.FunctionBody, letBody.Value));
     }
 
-    /// <summary>Parses <c>let rec name = fun (param: ParamType): ReturnType => functionBody</c>, up to but not
+    /// <summary>
+    /// Parses <c>let rec name = func(Type1 p1, Type2 p2, ...): ReturnType => functionBody</c>, up to but not
     /// including <c>in</c> — shared by the in-expression <c>let rec ... in ...</c> form and top-level program
-    /// declarations, which don't use <c>in</c> at all.</summary>
+    /// declarations, which don't use <c>in</c> at all. Only <c>p1</c> becomes the recursive binding's own
+    /// parameter (the AST only carries one); any further params desugar to ordinary nested <see cref="FunExpr"/>s
+    /// wrapping the body, with <paramref name="ReturnType"/> becoming the matching <see cref="FunctionType"/> chain
+    /// — <c>func(Int a, Int b): Int => body</c> ends up typed exactly like a hand-nested
+    /// <c>func(Int a): Int -> Int => func(Int b): Int => body</c> would, just without that type-annotation gymnastics.
+    /// </summary>
     private Result<(string Name, string ParamName, KlexirType ParamType, KlexirType ReturnType, Expr FunctionBody)> ParseLetRecHeader()
     {
         _position++; // 'let'
@@ -91,52 +97,19 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
 
         _position++;
 
-        if (Current.Type != TokenType.Fun)
+        if (Current.Type != TokenType.Func)
         {
             return Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(
                 Error.Create($"'let rec' requires a function value at {Current.Position}."));
         }
 
-        _position++; // 'fun'
+        _position++; // 'func'
 
-        if (Current.Type != TokenType.LParen)
+        var parameters = ParseFuncParams();
+        if (parameters.IsFailure)
         {
-            return Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(
-                Error.Create($"Expected '(' after 'fun' at {Current.Position}."));
+            return Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(parameters.Error);
         }
-
-        _position++;
-
-        if (Current.Type != TokenType.Identifier)
-        {
-            return Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(
-                Error.Create($"Expected a parameter name at {Current.Position}."));
-        }
-
-        var paramName = Current.Text;
-        _position++;
-
-        if (Current.Type != TokenType.Colon)
-        {
-            return Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(
-                Error.Create($"Expected ':' after parameter name at {Current.Position}."));
-        }
-
-        _position++;
-
-        var paramType = ParseTypeAnnotation();
-        if (paramType.IsFailure)
-        {
-            return Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(paramType.Error);
-        }
-
-        if (Current.Type != TokenType.RParen)
-        {
-            return Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(
-                Error.Create($"Expected ')' at {Current.Position}."));
-        }
-
-        _position++;
 
         if (Current.Type != TokenType.Colon)
         {
@@ -146,10 +119,10 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
 
         _position++;
 
-        var returnType = ParseTypeAnnotation();
-        if (returnType.IsFailure)
+        var declaredReturnType = ParseTypeAnnotation();
+        if (declaredReturnType.IsFailure)
         {
-            return Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(returnType.Error);
+            return Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(declaredReturnType.Error);
         }
 
         if (Current.Type != TokenType.FatArrow)
@@ -161,50 +134,40 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
         _position++;
 
         var functionBody = ParseTop();
-        return functionBody.IsFailure
-            ? Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(functionBody.Error)
-            : Result<(string, string, KlexirType, KlexirType, Expr)>.Success(
-                (name, paramName, paramType.Value, returnType.Value, functionBody.Value));
+        if (functionBody.IsFailure)
+        {
+            return Result<(string, string, KlexirType, KlexirType, Expr)>.Failure(functionBody.Error);
+        }
+
+        var (firstName, firstType) = parameters.Value[0];
+        var innerBody = functionBody.Value;
+        var effectiveReturnType = declaredReturnType.Value;
+
+        for (var i = parameters.Value.Count - 1; i >= 1; i--)
+        {
+            innerBody = new FunExpr(parameters.Value[i].Name, parameters.Value[i].Type, innerBody);
+            effectiveReturnType = new FunctionType(parameters.Value[i].Type, effectiveReturnType);
+        }
+
+        return Result<(string, string, KlexirType, KlexirType, Expr)>.Success(
+            (name, firstName, firstType, effectiveReturnType, innerBody));
     }
 
-    private Result<Expr> ParseFun()
+    /// <summary>
+    /// Parses <c>func(Type1 name1, Type2 name2, ...) => body</c> — pure surface sugar over currying, not a new
+    /// calling convention: <c>func(Int x, Int y) => x + y</c> builds the exact same nested <see cref="FunExpr"/>
+    /// tree as writing <c>func(Int x) => func(Int y) => x + y</c> by hand, so application stays <c>f x y</c>
+    /// (never <c>f(x, y)</c>) and every existing curried/partial-application pattern keeps working unchanged.
+    /// </summary>
+    private Result<Expr> ParseFunc()
     {
-        _position++; // 'fun'
+        _position++; // 'func'
 
-        if (Current.Type != TokenType.LParen)
+        var parameters = ParseFuncParams();
+        if (parameters.IsFailure)
         {
-            return Result<Expr>.Failure(Error.Create($"Expected '(' after 'fun' at {Current.Position}."));
+            return Result<Expr>.Failure(parameters.Error);
         }
-
-        _position++;
-
-        if (Current.Type != TokenType.Identifier)
-        {
-            return Result<Expr>.Failure(Error.Create($"Expected a parameter name at {Current.Position}."));
-        }
-
-        var paramName = Current.Text;
-        _position++;
-
-        if (Current.Type != TokenType.Colon)
-        {
-            return Result<Expr>.Failure(Error.Create($"Expected ':' after parameter name at {Current.Position}."));
-        }
-
-        _position++;
-
-        var paramType = ParseTypeAnnotation();
-        if (paramType.IsFailure)
-        {
-            return Result<Expr>.Failure(paramType.Error);
-        }
-
-        if (Current.Type != TokenType.RParen)
-        {
-            return Result<Expr>.Failure(Error.Create($"Expected ')' at {Current.Position}."));
-        }
-
-        _position++;
 
         if (Current.Type != TokenType.FatArrow)
         {
@@ -214,9 +177,67 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
         _position++;
 
         var body = ParseTop();
-        return body.IsFailure
-            ? body
-            : Result<Expr>.Success(new FunExpr(paramName, paramType.Value, body.Value));
+        if (body.IsFailure)
+        {
+            return body;
+        }
+
+        var expr = body.Value;
+        for (var i = parameters.Value.Count - 1; i >= 0; i--)
+        {
+            expr = new FunExpr(parameters.Value[i].Name, parameters.Value[i].Type, expr);
+        }
+
+        return Result<Expr>.Success(expr);
+    }
+
+    /// <summary>Parses <c>(Type1 name1, Type2 name2, ...)</c> — type before name, no colon, one or more
+    /// comma-separated parameters. Shared by <see cref="ParseFunc"/> and <see cref="ParseLetRecHeader"/>.</summary>
+    private Result<List<(string Name, KlexirType Type)>> ParseFuncParams()
+    {
+        if (Current.Type != TokenType.LParen)
+        {
+            return Result<List<(string Name, KlexirType Type)>>.Failure(
+                Error.Create($"Expected '(' after 'func' at {Current.Position}."));
+        }
+
+        _position++;
+
+        var parameters = new List<(string Name, KlexirType Type)>();
+
+        while (true)
+        {
+            var paramType = ParseTypeAnnotation();
+            if (paramType.IsFailure)
+            {
+                return Result<List<(string Name, KlexirType Type)>>.Failure(paramType.Error);
+            }
+
+            if (Current.Type != TokenType.Identifier)
+            {
+                return Result<List<(string Name, KlexirType Type)>>.Failure(
+                    Error.Create($"Expected a parameter name at {Current.Position}."));
+            }
+
+            parameters.Add((Current.Text, paramType.Value));
+            _position++;
+
+            if (Current.Type != TokenType.Comma)
+            {
+                break;
+            }
+
+            _position++;
+        }
+
+        if (Current.Type != TokenType.RParen)
+        {
+            return Result<List<(string Name, KlexirType Type)>>.Failure(Error.Create($"Expected ')' at {Current.Position}."));
+        }
+
+        _position++;
+
+        return Result<List<(string Name, KlexirType Type)>>.Success(parameters);
     }
 
     private Result<KlexirType> ParseTypeAnnotation()
@@ -880,7 +901,7 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
                 return Result<Expr>.Failure(header.Error);
             }
 
-            // A ';' terminator is required here — without it, a value like '... fun (n: Int) => n' directly
+            // A ';' terminator is required here — without it, a value like '... func(Int n) => n' directly
             // followed by the next declaration's leading identifier is grammatically indistinguishable from
             // that value being *applied* to it (Klexir's function calls are juxtaposition: 'f x').
             var semicolon = Expect(TokenType.Semicolon, "';' after a top-level 'let rec' declaration");

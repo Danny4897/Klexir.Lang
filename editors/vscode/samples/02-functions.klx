@@ -1,7 +1,7 @@
 // fun crea funzioni; l'applicazione e' curried per costruzione,
 // quindi una funzione a due argomenti e' davvero una funzione che ne restituisce un'altra.
-let square = fun (x: Int) => x * x;
-let add = fun (x: Int) => fun (y: Int) => x + y;
+let square = func(Int x) => x * x;
+let add = func(Int x) => func(Int y) => x + y;
 
 // Applicazione parziale: addFive "ricorda" x = 5 nella sua closure.
 let addFive = add 5;

@@ -13,27 +13,26 @@ let existingUsers = [
     User { CodiceFiscale: "VRDLGU90B02F205X", Age: 34 }
 ];
 
-let existsInRepo = fun (cf: String) =>
-    let matches = fold(filter(existingUsers, fun (u: User) => u.CodiceFiscale == cf), 0,
-        fun (acc: Int) => fun (u: User) => acc + 1) in
-    matches > 0;
+let existsInRepo = func(String cf) =>
+    fold(filter(existingUsers, func(User u) => u.CodiceFiscale == cf), 0,
+        func(Int acc) => func(User u) => acc + 1) > 0;
 
 // --- Funzioni atomiche di validazione ---
-let checkAdult = fun (u: User) =>
+let checkAdult = func(User u) =>
     if u.Age >= 18 then Ok<Int>(u) else Err<User>(1);
 
-let checkCodiceFiscale = fun (u: User) =>
+let checkCodiceFiscale = func(User u) =>
     if u.CodiceFiscale == "" then Err<User>(2) else Ok<Int>(u);
 
-let checkNotInDb = fun (u: User) =>
+let checkNotInDb = func(User u) =>
     if existsInRepo u.CodiceFiscale then Err<User>(3) else Ok<Int>(u);
 
 // --- Service: pipeline di validazione ---
-let validateNewUser = fun (u: User) =>
+let validateNewUser = func(User u) =>
     checkAdult u andThen checkCodiceFiscale andThen checkNotInDb;
 
 // --- Controller: valido -> registra (timestamp dal plugin Clock), invalido -> motivo ---
-let registerUser = fun (u: User) =>
+let registerUser = func(User u) =>
     match validateNewUser u with
         Ok(valid) => Registered (now true)
         | Err(code) => Rejected code;

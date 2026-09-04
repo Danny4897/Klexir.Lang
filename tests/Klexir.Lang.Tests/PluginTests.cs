@@ -128,7 +128,7 @@ public sealed class PluginTests
             types: [widget]);
 
         var typed = CheckSuccessfully(
-            "let useWidget = fun (w: Widget) => widgetToInt w in useWidget (makeWidget 7)", plugin);
+            "let useWidget = func(Widget w) => widgetToInt w in useWidget (makeWidget 7)", plugin);
         var result = await new Evaluator().EvaluateAsync(typed, [plugin]);
 
         result.IsSuccess.Should().BeTrue();

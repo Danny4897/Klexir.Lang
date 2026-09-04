@@ -3,7 +3,7 @@
 Un `let` normale non vede il proprio nome dentro il proprio valore — `let rec` si', proprio per permettere la ricorsione. Il tipo di ritorno va scritto esplicitamente, niente inferenza.
 
 ```klexir
-let rec fact = fun (n: Int): Int =>
+let rec fact = func(Int n): Int =>
     if n < 2 then 1 else n * fact (n - 1);
 
 fact 6

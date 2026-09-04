@@ -7,7 +7,7 @@ namespace Klexir.Lang.Tests;
 public sealed class RecursionTests
 {
     private const string Factorial =
-        "let rec fact = fun (n: Int): Int => if n < 2 then 1 else n * fact (n - 1) in fact 5";
+        "let rec fact = func(Int n): Int => if n < 2 then 1 else n * fact (n - 1) in fact 5";
 
     [Fact]
     public void ParseExpression_parses_let_rec()
@@ -37,14 +37,14 @@ public sealed class RecursionTests
     [Fact]
     public void Check_fails_when_the_declared_return_type_does_not_match_the_bodys_type()
     {
-        Check("let rec f = fun (n: Int): Bool => n in f 1").IsFailure.Should().BeTrue();
+        Check("let rec f = func(Int n): Bool => n in f 1").IsFailure.Should().BeTrue();
     }
 
     [Fact]
     public void Check_fails_for_self_reference_inside_a_plain_non_recursive_let()
     {
         // Plain 'let' does not bind the name inside its own value — only 'let rec' does.
-        Check("let fact = fun (n: Int) => if n < 2 then 1 else n * fact (n - 1) in fact 5")
+        Check("let fact = func(Int n) => if n < 2 then 1 else n * fact (n - 1) in fact 5")
             .IsFailure.Should().BeTrue();
     }
 
@@ -58,7 +58,7 @@ public sealed class RecursionTests
     public void Evaluate_each_call_to_a_recursive_function_gets_its_own_activation()
     {
         const string source =
-            "let rec sum = fun (n: Int): Int => if n == 0 then 0 else n + sum (n - 1) in sum 10 + sum 5";
+            "let rec sum = func(Int n): Int => if n == 0 then 0 else n + sum (n - 1) in sum 10 + sum 5";
 
         Run(source).Should().Be(new IntValue(55 + 15));
     }
