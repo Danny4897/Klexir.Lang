@@ -12,10 +12,10 @@ let checkCodiceFiscale = fun (u: NewUser) =>
 let checkNotInDb = fun (u: NewUser) =>
     if u.CodiceFiscale == "RSSMRA80A01H501U" then Err<NewUser>(3) else Ok<Int>(u);   // 3 = gia' presente
 
-// La pipeline: ogni bind incatena la funzione successiva SOLO se la precedente e' andata bene.
-// Stessa idea di MonadicSharp (.Bind(...).Bind(...)), scritta come chiamate a funzione invece che a metodo.
+// La pipeline, letta come una frase: ogni andThen incatena il passo successivo
+// SOLO se il precedente e' andato bene -- stessa idea di MonadicSharp (.Bind(...).Bind(...)).
 let validateNewUser = fun (u: NewUser) =>
-    bind(bind(checkAdult u, checkCodiceFiscale), checkNotInDb);
+    checkAdult u andThen checkCodiceFiscale andThen checkNotInDb;
 
 // Controller: l'unico punto che trasforma il Result in una risposta semplice.
 let addUser = fun (u: NewUser) =>

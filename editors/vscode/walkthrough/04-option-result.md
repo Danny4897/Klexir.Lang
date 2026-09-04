@@ -1,6 +1,6 @@
 ## Option e Result: railway-oriented programming
 
-`Option<T>` (`Some`/`None`) dice "trovato o no"; `Result<T, E>` (`Ok`/`Err`) aggiunge un errore vero. Sono tipi di prima classe, non una convenzione — con `match` esaustivo e `bind` per incatenare passi senza controlli manuali.
+`Option<T>` (`Some`/`None`) dice "trovato o no"; `Result<T, E>` (`Ok`/`Err`) aggiunge un errore vero. Sono tipi di prima classe, non una convenzione — con `match` esaustivo e `andThen` per incatenare passi senza controlli manuali, leggendo il codice come una frase.
 
 ```klexir
 let findUser = fun (id: Int) =>
@@ -12,11 +12,12 @@ let toResult = fun (id: Int) =>
 let checkPositive = fun (x: Int) =>
     if x > 0 then Ok<Bool>(x) else Err<Int>(false);
 
-let pipeline = fun (id: Int) => bind(toResult id, checkPositive);
+// "prova toResult, POI checkPositive" -- se il primo fallisce, il secondo non gira nemmeno.
+let pipeline = fun (id: Int) => toResult id andThen checkPositive;
 
 match pipeline 1 with Ok(x) => x | Err(e) => 0 - 1
 ```
 
-`bind` corto-circuita al primo `Err`/`None` — se `toResult` fallisce, `checkPositive` non gira nemmeno. Questo e' esattamente lo stile di [MonadicSharp](https://www.nuget.org/packages/MonadicSharp/), la libreria .NET da cui Klexir eredita l'idea.
+`andThen` e' zucchero sintattico su `bind` — `a andThen f` e' esattamente `bind(a, f)`, solo scritto da sinistra a destra invece che annidato. `bind(container, mapper)` resta utile quando la funzione da incatenare e' un valore qualunque (passata come argomento a un'altra funzione, per esempio), non solo scritta li' per nome. Corto-circuita al primo `Err`/`None`: questo e' esattamente lo stile di [MonadicSharp](https://www.nuget.org/packages/MonadicSharp/) (`.Bind(...).Bind(...)`), la libreria .NET da cui Klexir eredita l'idea — Rust ed Elm chiamano la stessa identica operazione `and_then`/`andThen`.
 
 [Apri l'esempio e provalo](command:klexir.openSample.04)

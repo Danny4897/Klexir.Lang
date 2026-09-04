@@ -103,6 +103,7 @@ public sealed class Lexer(string source)
                     "fold" => TokenType.Fold,
                     "record" => TokenType.Record,
                     "union" => TokenType.Union,
+                    "andThen" => TokenType.AndThen,
                     _ => TokenType.Identifier,
                 };
                 tokens.Add(new Token(type, text, new SourcePosition(line, startColumn)));

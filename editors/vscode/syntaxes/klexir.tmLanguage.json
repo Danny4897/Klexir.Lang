@@ -44,7 +44,7 @@
         },
         {
           "name": "keyword.other.klexir",
-          "match": "\\b(map|bind|filter|fold)\\b"
+          "match": "\\b(map|bind|filter|fold|andThen)\\b"
         }
       ]
     },

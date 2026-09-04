@@ -1,6 +1,6 @@
-## Pipeline di validazione: piu' funzioni atomiche, una `bind` alla volta
+## Pipeline di validazione: piu' funzioni atomiche, una `andThen` alla volta
 
-Ogni check e' una funzione **atomica**: fa un solo controllo, non sa nulla degli altri, e restituisce un `Result<NewUser, Int>` — l'utente stesso se va bene, un codice d'errore se no. Comporli e' `bind(bind(check1 u, check2), check3)`: la stessa idea del `.Bind(...).Bind(...)` di [MonadicSharp](https://www.nuget.org/packages/MonadicSharp/) in C#, scritta come chiamate a funzione invece che a metodo — in Klexir non c'e' sintassi `a.b()`, solo applicazione.
+Ogni check e' una funzione **atomica**: fa un solo controllo, non sa nulla degli altri, e restituisce un `Result<NewUser, Int>` — l'utente stesso se va bene, un codice d'errore se no. Comporli e' `checkAdult u andThen checkCodiceFiscale andThen checkNotInDb`: si legge come una frase, "prova questo, POI questo, POI questo" — la stessa idea del `.Bind(...).Bind(...)` di [MonadicSharp](https://www.nuget.org/packages/MonadicSharp/) in C#, senza sintassi a metodo.
 
 ```klexir
 record NewUser { Age: Int, CodiceFiscale: String };
@@ -17,9 +17,10 @@ let checkCodiceFiscale = fun (u: NewUser) =>
 let checkNotInDb = fun (u: NewUser) =>
     if u.CodiceFiscale == "RSSMRA80A01H501U" then Err<NewUser>(3) else Ok<Int>(u);   // 3 = gia' presente
 
-// La pipeline: ogni bind incatena il passo successivo SOLO se il precedente e' andato bene.
+// La pipeline, letta come una frase: ogni andThen incatena il passo successivo
+// SOLO se il precedente e' andato bene.
 let validateNewUser = fun (u: NewUser) =>
-    bind(bind(checkAdult u, checkCodiceFiscale), checkNotInDb);
+    checkAdult u andThen checkCodiceFiscale andThen checkNotInDb;
 
 // Controller: l'unico punto che trasforma il Result in una risposta semplice.
 let addUser = fun (u: NewUser) =>
@@ -28,6 +29,6 @@ let addUser = fun (u: NewUser) =>
 addUser (NewUser { Age: 25, CodiceFiscale: "ABCDEF12G34H567I" })
 ```
 
-Prova a cambiare `Age` a `15`, poi `CodiceFiscale` a `""`, poi a `"RSSMRA80A01H501U"` — vedrai rispettivamente `1`, `2`, `3`: il primo controllo che fallisce vince, quelli dopo non girano nemmeno (esattamente come `checkAdult` che salta `checkCodiceFiscale` nell'esempio del layered architecture). Ogni funzione atomica resta testabile e leggibile da sola — la pipeline e' solo composizione, zero `if (result.IsFailure) return ...` sparsi ovunque.
+`andThen` e' zucchero sintattico: `a andThen f` e' esattamente `bind(a, f)`, associativo a sinistra — `x andThen f andThen g` e' `bind(bind(x, f), g)`. Prova a cambiare `Age` a `15`, poi `CodiceFiscale` a `""`, poi a `"RSSMRA80A01H501U"` — vedrai rispettivamente `1`, `2`, `3`: il primo controllo che fallisce vince, quelli dopo non girano nemmeno. Ogni funzione atomica resta testabile e leggibile da sola — la pipeline e' solo composizione, zero `if (result.IsFailure) return ...` sparsi ovunque.
 
 [Apri l'esempio e provalo](command:klexir.openSample.11)

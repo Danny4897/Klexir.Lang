@@ -50,6 +50,7 @@ public enum TokenType
     Fold,
     Record,
     Union,
+    AndThen,
     Eof,
 }
 

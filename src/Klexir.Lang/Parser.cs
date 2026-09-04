@@ -4,7 +4,8 @@ namespace Klexir.Lang;
 
 /// <summary>
 /// Recursive-descent parser. Precedence, loosest to tightest: <c>let ... in</c> / <c>if ... then ... else</c>,
-/// comparison (== &lt; &gt; &lt;= &gt;=, non-chaining), additive (+ -), multiplicative (* /), primary.
+/// <c>andThen</c> (sugar over <c>bind</c>, left-associative), comparison (== &lt; &gt; &lt;= &gt;=, non-chaining),
+/// additive (+ -), multiplicative (* /), primary.
 /// </summary>
 public sealed class Parser(IReadOnlyList<Token> tokens)
 {
@@ -37,7 +38,7 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
             TokenType.Bind => ParseMapOrBind(isBind: true),
             TokenType.Filter => ParseFilter(),
             TokenType.Fold => ParseFold(),
-            _ => ParseComparison(),
+            _ => ParseAndThen(),
         };
 
     private Token Peek(int offset) => tokens[Math.Min(_position + offset, tokens.Count - 1)];
@@ -1143,6 +1144,37 @@ public sealed class Parser(IReadOnlyList<Token> tokens)
         return elseBranch.IsFailure
             ? elseBranch
             : Result<Expr>.Success(new IfExpr(condition.Value, thenBranch.Value, elseBranch.Value));
+    }
+
+    /// <summary>
+    /// Pure sugar over <c>bind</c>, left-associative, looser than comparison: <c>a andThen f andThen g</c> parses
+    /// to the same <see cref="BindExpr"/> tree as <c>bind(bind(a, f), g)</c> — reads as a left-to-right pipeline
+    /// instead of nested parens, short-circuiting on the first <c>Err</c>/<c>None</c> exactly like <c>bind</c>.
+    /// </summary>
+    private Result<Expr> ParseAndThen()
+    {
+        var left = ParseComparison();
+        if (left.IsFailure)
+        {
+            return left;
+        }
+
+        var expr = left.Value;
+
+        while (Current.Type == TokenType.AndThen)
+        {
+            _position++;
+
+            var right = ParseComparison();
+            if (right.IsFailure)
+            {
+                return right;
+            }
+
+            expr = new BindExpr(expr, right.Value);
+        }
+
+        return Result<Expr>.Success(expr);
     }
 
     private Result<Expr> ParseComparison()
