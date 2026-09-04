@@ -4,5 +4,15 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Klexir.Lang.Abstractions\Klexir.Lang.Abstractions.csproj" />
+    <!--
+      TEMPORARY: Klexir.Runtime.Abstractions (the OpCode wire format) and Klexir.Runtime (BytecodeBuilder) aren't
+      published anywhere yet (no NuGet.org release, no GitHub Packages) — see the ecosystem plan's "Cross-repository
+      in-process references target only an Abstractions package" rule, which this violates on purpose until that
+      publish happens. Sibling-repo path reference for local development only; this WILL fail to restore in
+      Klexir.Lang's own CI, which doesn't check out Klexir.Runtime. Swap for a versioned PackageReference once
+      Klexir.Runtime.Abstractions is actually published.
+    -->
+    <ProjectReference Include="..\..\..\Klexir.Runtime\src\Klexir.Runtime.Abstractions\Klexir.Runtime.Abstractions.csproj" />
+    <ProjectReference Include="..\..\..\Klexir.Runtime\src\Klexir.Runtime\Klexir.Runtime.csproj" />
   </ItemGroup>
 </Project>

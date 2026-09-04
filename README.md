@@ -6,7 +6,7 @@
 
 The Klexir programming language: a lexer, a recursive-descent parser, a structural type checker, and a tree-walking evaluator — so a Klexir program written as a string can now be tokenized, parsed, type-checked, and actually **run** to a value. Built on [MonadicSharp](https://www.nuget.org/packages/MonadicSharp/) `Result<T>` — no exceptions for compiler-control flow, ever, evaluation included. `Option<T>` and `Result<T, E>` aren't just how the compiler is implemented — they're first-class Klexir *types*, with `Some`/`None`/`Ok`/`Err`, exhaustive `match`, and `map`/`bind` for railway-oriented composition inside the language itself. `Int`, `Bool`, `String`, and `List<T>` are the ground data types, and `KlexirInterop` bridges a Klexir program's `Option`/`Result` straight into a real MonadicSharp `Option<T>`/`Result<T>` for a hosting .NET app.
 
-> **Status: public research repo, not yet published to NuGet.** No compiler to `Klexir.Runtime` bytecode yet — this evaluator interprets the typed AST directly. See [What can't Klexir do yet?](#what-cant-klexir-do-yet) below. Reference the project directly until/unless it's published.
+> **Status: public research repo, not yet published to NuGet.** `Klexir.Runtime.Abstractions`/`Klexir.Runtime` aren't published anywhere either, so `Compiler` (below) is wired in via a temporary sibling-repo path reference — see the comment in `src/Klexir.Lang/Klexir.Lang.csproj`. A core subset (numbers, booleans, comparisons, `let`, `if`, closures, `let rec`) now compiles to real `Klexir.Runtime` bytecode and runs there; `Evaluator` still interprets the typed AST directly for everything else (String/List/Option/Result/record/union/plugins). See [What can't Klexir do yet?](#what-cant-klexir-do-yet) below. Reference the project directly until/unless it's published.
 
 ---
 
@@ -133,6 +133,18 @@ delay 5   // awaits 5ms for real, then returns 5 — a native function can do ac
 $ dotnet run --project src/Klexir.Cli -- run --plugin=clock uses-clock.klx
 ```
 
+The core subset compiles to real bytecode and runs on `Klexir.Runtime`'s VM instead of the tree-walking evaluator — same program, same answer, different execution path:
+
+```csharp
+Result<CompiledProgram> compiled = Compiler.Compile(typed);
+Result<long> value = new KlexirVm(compiled.Value.Code, compiled.Value.EntryPoint).Run();
+```
+
+```bash
+$ dotnet run --project src/Klexir.Cli -- compile factorial.klx
+720
+```
+
 ---
 
 ## What's in the box
@@ -159,6 +171,7 @@ $ dotnet run --project src/Klexir.Cli -- run --plugin=clock uses-clock.klx
 | List ops | `map(list, fn)`, `filter(list, predicate)`, `fold(list, initial, folder)` | `map` doubles as List's Functor op; `filter` keeps elements where `predicate` is `true`; `fold` is left-fold with a curried `Acc -> Elem -> Acc` folder |
 | MonadicSharp bridge | `KlexirInterop.ToOption/ToResult/FromOption/FromResult`, `AsInt/AsBool/AsString` | Converts a Klexir `Some`/`None`/`Ok`/`Err` value to/from a real `MonadicSharp.Option<T>`/`Result<T>` — a hosting .NET app gets the type it already works with, not a `KlexirValue` tree to pattern-match by hand |
 | Plugins | `IKlexirPlugin`, `TypeChecker.Check(ast, plugins)`, `Evaluator.EvaluateAsync(typed, plugins)` | A compile-time whitelist of native capabilities a host opts a program into — not a runtime-discovered assembly, nothing a `.klx` file itself chooses. A plugin declares native functions (ordinary curried Klexir functions backed by a `Func<args, Task<Result<KlexirValue>>>`, so real async I/O works) and opaque types (nominal, passed between plugin functions, never constructed or pattern-matched from Klexir source). `Klexir.Lang.Plugins.ClockPlugin` (`now`, `delay`) is the reference implementation; `Klexir.Cli` opts in via `--plugin=clock` |
+| Compiler | `Compiler.Compile(typed)`, `Klexir.Cli`'s `compile` command | Compiles the core subset (Int/Bool, `+ - * /`, comparisons, `let`, `if`, closures, `let rec`) to real `Klexir.Runtime` bytecode instead of interpreting the AST — every function is compiled as a closure heap object called through `OpCode.CallIndirect`, so currying, higher-order use, and recursion (through the closure's own handle, no self-capture needed) all work through the VM, not just the evaluator. String/List/Option/Result/record/union/plugin calls aren't compilable yet — those still only run through `Evaluator`. Captures every name visible at a closure's definition site rather than only its free variables — correct, but a real free-variable analysis would produce smaller closures |
 
 ### Language sample
 
@@ -217,7 +230,7 @@ handleGetAdultAge 2   // 25 — adult, age passed through
 
 A Klexir *program* — not just an expression — runs end to end today; `Option<T>`/`Result<T, E>` are real, first-class, pattern-matchable types; `String`/`List<T>`/user-defined `record`s and `union`s cover real data, not just `Int`/`Bool`; and `KlexirInterop` bridges Klexir's `Option`/`Result` to the real MonadicSharp ones for a hosting .NET app. What's still missing before it's a language you'd write a real program in:
 
-1. **A compiler to `Klexir.Runtime` bytecode.** The evaluator interprets the AST directly (tree-walking) — there's no IR, no codegen, no way to produce a standalone `.klx` bytecode file `Klexir.Runtime` can run without this repo present. (`Klexir.Runtime` also has no local-variable or jump opcodes yet, which a real codegen would need.)
+1. **The compiler only covers the core subset.** `Compiler.Compile` targets real `Klexir.Runtime` bytecode for numbers/booleans/comparisons/`let`/`if`/closures/`let rec` (see the Compiler row above) — but String, `List<T>`, `Option`/`Result`, records, unions, and plugin calls all still only run through `Evaluator`; compiling them needs a heap representation for each (tagged records/unions are the closest — `Klexir.Runtime`'s `NewObj`/`LoadField` already fit — but strings/lists need one too, and plugins need a native-call opcode `CallIndirect` doesn't provide). There's also no way yet to produce a standalone bytecode *file* — `Compile` returns an in-memory `byte[]` for `Klexir.Cli`/tests to hand straight to `KlexirVm`.
 2. **No generics, no recursive ADTs.** `record`/`union` give you product and sum types, but nothing in Klexir is generic — no user-defined `Pair<A, B>`, no function that works over any `T`. A `union` also can't reference its own type in a variant's field (no `Cons(Int, IntList)` inside `union IntList`'s own declaration) — self-reference resolves against whatever the name meant *before* this declaration, not the one being written, so a real linked-list/tree ADT isn't expressible yet. No modules, no I/O, no negative integer literals either. A record/union type name that's never actually constructed or matched on also isn't validated against a real declaration — a typo in an unused parameter's type silently type-checks (see `RecordType`'s doc comment in `TypedExpr.cs`).
 3. **Calling .NET *from* Klexir is curated, not general.** `IKlexirPlugin` lets a host bind native async functions and opaque types into a Klexir program's environment (see the Plugins row above), so Klexir code *can* call into .NET now — but only through a compile-time whitelist the host builds and hands over. There's still no way for `.klx` source itself to reach an arbitrary C# method or reference a .NET library directly; that would need real FFI syntax and reflection-based signature ingestion, not just a curated plugin list.
 
