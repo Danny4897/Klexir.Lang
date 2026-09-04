@@ -19,7 +19,9 @@ Copy-Item -Recurse "editors\vscode" "$env:USERPROFILE\.vscode\extensions\klexir-
 
 ## Tutorial interattivo
 
-`Ctrl+Shift+P` → **Help: Open Walkthrough...** → **Impara Klexir** (o dalla pagina Get Started) apre un tour in 10 passi — dai tipi primitivi (`Int`/`Bool`/`String`) fino a un vero controller/service/repository composto con `bind`, passando per funzioni/closures, `if`, `Option`/`Result`, `String`/`List`, `record`, `union`, `let rec` e i plugin. Ogni passo apre un file `.klx` eseguibile (copiato in `<workspace>/klexir-tutorial/` alla prima apertura, cosi' le tue modifiche restano tue) e si segna completato non appena lo apri.
+Icona **Klexir Tutorial** nell'Activity Bar (a sinistra, come Vim/Neovim) — sempre a un click di distanza, non un wizard usa-e-getta. Elenca 10 lezioni, dai tipi primitivi (`Int`/`Bool`/`String`) fino a un vero controller/service/repository composto con `bind`, passando per funzioni/closures, `if`, `Option`/`Result`, `String`/`List`, `record`, `union`, `let rec` e i plugin.
+
+Cliccando una lezione si apre uno schermo diviso: a sinistra il file `.klx` eseguibile della lezione (copiato in `<workspace>/klexir-tutorial/` alla prima apertura, cosi' le tue modifiche restano tue — puoi editarlo e lanciarlo con `Ctrl+F5`), a destra l'anteprima Markdown della spiegazione. La lezione si segna completata (spunta verde nella sidebar) non appena la apri; il bottone di reset in alto nella vista azzera il progresso.
 
 ## Running a file
 

@@ -2,18 +2,20 @@ const vscode = require("vscode");
 const path = require("path");
 const os = require("os");
 
-const TUTORIAL_SAMPLES = [
-  { id: "01", file: "01-basics.klx" },
-  { id: "02", file: "02-functions.klx" },
-  { id: "03", file: "03-control-flow.klx" },
-  { id: "04", file: "04-option-result.klx" },
-  { id: "05", file: "05-strings-lists.klx" },
-  { id: "06", file: "06-records.klx" },
-  { id: "07", file: "07-unions.klx" },
-  { id: "08", file: "08-recursion.klx" },
-  { id: "09", file: "09-plugins.klx" },
-  { id: "10", file: "10-layered-architecture.klx" },
+const LESSONS = [
+  { id: "01", file: "01-basics.klx", md: "01-basics.md", title: "Tipi primitivi", subtitle: "Int, Bool, String" },
+  { id: "02", file: "02-functions.klx", md: "02-functions.md", title: "Funzioni e closures", subtitle: "fun, currying" },
+  { id: "03", file: "03-control-flow.klx", md: "03-control-flow.md", title: "Controllo di flusso", subtitle: "if/then/else, confronti" },
+  { id: "04", file: "04-option-result.klx", md: "04-option-result.md", title: "Option e Result", subtitle: "railway-oriented" },
+  { id: "05", file: "05-strings-lists.klx", md: "05-strings-lists.md", title: "String e List", subtitle: "map/filter/fold" },
+  { id: "06", file: "06-records.klx", md: "06-records.md", title: "record", subtitle: "tipi prodotto" },
+  { id: "07", file: "07-unions.klx", md: "07-unions.md", title: "union", subtitle: "tipi somma, match esaustivo" },
+  { id: "08", file: "08-recursion.klx", md: "08-recursion.md", title: "Ricorsione", subtitle: "let rec" },
+  { id: "09", file: "09-plugins.klx", md: "09-plugins.md", title: "Plugin", subtitle: "capacita' native opt-in" },
+  { id: "10", file: "10-layered-architecture.klx", md: "10-layered-architecture.md", title: "Tutto insieme", subtitle: "controller/service/repository" },
 ];
+
+const COMPLETED_KEY = "klexir.completedLessons";
 
 /** @type {vscode.Uri} */
 let extensionUri;
@@ -22,17 +24,85 @@ let extensionUri;
 function activate(context) {
   extensionUri = context.extensionUri;
 
+  const lessonsProvider = new KlexirLessonsProvider(context);
   context.subscriptions.push(
-    vscode.commands.registerCommand("klexir.runFile", runActiveFile)
+    vscode.window.registerTreeDataProvider("klexirTutorialLessons", lessonsProvider)
   );
 
-  for (const sample of TUTORIAL_SAMPLES) {
+  context.subscriptions.push(
+    vscode.commands.registerCommand("klexir.runFile", runActiveFile),
+    vscode.commands.registerCommand("klexir.openLesson", (lesson) =>
+      openLesson(lessonsProvider, lesson)
+    ),
+    vscode.commands.registerCommand("klexir.resetTutorialProgress", () =>
+      lessonsProvider.resetProgress()
+    )
+  );
+
+  for (const lesson of LESSONS) {
     context.subscriptions.push(
-      vscode.commands.registerCommand(`klexir.openSample.${sample.id}`, () =>
-        openSample(sample.file)
+      vscode.commands.registerCommand(`klexir.openSample.${lesson.id}`, () =>
+        openSample(lesson.file)
       )
     );
   }
+}
+
+/**
+ * Tutor-style tree: one entry per lesson, a checkmark once it's been opened. Selecting a lesson opens
+ * its runnable sample in the main editor group and the matching lesson text as a Markdown preview beside
+ * it — read on one side, write and run on the other, at any time from the sidebar, not a one-shot wizard.
+ */
+class KlexirLessonsProvider {
+  constructor(context) {
+    this.context = context;
+    this._onDidChangeTreeData = new vscode.EventEmitter();
+    this.onDidChangeTreeData = this._onDidChangeTreeData.event;
+  }
+
+  refresh() {
+    this._onDidChangeTreeData.fire();
+  }
+
+  getTreeItem(lesson) {
+    const item = new vscode.TreeItem(lesson.title, vscode.TreeItemCollapsibleState.None);
+    item.description = lesson.subtitle;
+    item.iconPath = new vscode.ThemeIcon(this.isCompleted(lesson.id) ? "pass-filled" : "circle-large-outline");
+    item.command = { command: "klexir.openLesson", title: "Apri lezione", arguments: [lesson] };
+    item.contextValue = "klexirLesson";
+    return item;
+  }
+
+  getChildren() {
+    return LESSONS;
+  }
+
+  isCompleted(id) {
+    return this.context.workspaceState.get(COMPLETED_KEY, []).includes(id);
+  }
+
+  markCompleted(id) {
+    const done = this.context.workspaceState.get(COMPLETED_KEY, []);
+    if (!done.includes(id)) {
+      this.context.workspaceState.update(COMPLETED_KEY, [...done, id]);
+      this.refresh();
+    }
+  }
+
+  resetProgress() {
+    this.context.workspaceState.update(COMPLETED_KEY, []);
+    this.refresh();
+  }
+}
+
+async function openLesson(provider, lesson) {
+  const sampleUri = await copySampleIfNeeded(lesson.file);
+  await vscode.window.showTextDocument(sampleUri, { viewColumn: vscode.ViewColumn.One, preview: false });
+
+  const mdUri = vscode.Uri.joinPath(extensionUri, "walkthrough", lesson.md);
+  await vscode.commands.executeCommand("markdown.showPreviewToSide", mdUri);
+
+  provider.markCompleted(lesson.id);
 }
 
 async function runActiveFile() {
@@ -71,22 +141,26 @@ async function runActiveFile() {
 }
 
 /**
- * Opens a tutorial sample so it's editable and runnable — copies it out of the extension's own
- * install directory the first time (into the open workspace, or the user's home as a fallback), so
- * edits are the user's own and survive an extension update/reinstall.
+ * Copies a bundled tutorial sample out of the extension's own install directory into the open workspace
+ * (or the user's home as a fallback) the first time it's opened, so edits are the user's own and survive
+ * an extension update/reinstall — returns the copy's Uri either way.
  */
-async function openSample(fileName) {
+async function copySampleIfNeeded(fileName) {
   const source = vscode.Uri.joinPath(extensionUri, "samples", fileName);
   const targetDir = tutorialDir();
   const target = vscode.Uri.joinPath(targetDir, fileName);
 
-  const alreadyCopied = await fileExists(target);
-  if (!alreadyCopied) {
+  if (!(await fileExists(target))) {
     await vscode.workspace.fs.createDirectory(targetDir);
     const content = await vscode.workspace.fs.readFile(source);
     await vscode.workspace.fs.writeFile(target, content);
   }
 
+  return target;
+}
+
+async function openSample(fileName) {
+  const target = await copySampleIfNeeded(fileName);
   await vscode.window.showTextDocument(target, { preview: false });
 }
 

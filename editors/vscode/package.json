@@ -1,8 +1,8 @@
 {
   "name": "klexir-lang",
   "displayName": "Klexir Language Support",
-  "description": "Syntax highlighting and a Run command for Klexir (.klx) files.",
-  "version": "0.2.0",
+  "description": "Syntax highlighting, a Run command, and an interactive tutorial for Klexir (.klx) files.",
+  "version": "0.3.0",
   "publisher": "danny4897",
   "engines": {
     "vscode": "^1.85.0"
@@ -26,11 +26,40 @@
         "path": "./syntaxes/klexir.tmLanguage.json"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "klexirTutorial",
+          "title": "Klexir Tutorial",
+          "icon": "media/activity-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "klexirTutorial": [
+        {
+          "id": "klexirTutorialLessons",
+          "name": "Lezioni",
+          "icon": "media/activity-icon.svg"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "klexirTutorialLessons",
+        "contents": "Clicca una lezione per aprire la documentazione a schermo diviso insieme a un file .klx eseguibile.\n\nOgni lezione si segna completata da sola non appena la apri."
+      }
+    ],
     "commands": [
       {
         "command": "klexir.runFile",
         "title": "Klexir: Run File",
         "icon": "$(play)"
+      },
+      {
+        "command": "klexir.resetTutorialProgress",
+        "title": "Klexir Tutorial: Reset Progress",
+        "icon": "$(refresh)"
       },
       { "command": "klexir.openSample.01", "title": "Klexir Tutorial: Open \"Primitive types\" sample" },
       { "command": "klexir.openSample.02", "title": "Klexir Tutorial: Open \"Functions & closures\" sample" },
@@ -48,6 +77,13 @@
         {
           "command": "klexir.runFile",
           "when": "editorLangId == klexir",
+          "group": "navigation"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "klexir.resetTutorialProgress",
+          "when": "view == klexirTutorialLessons",
           "group": "navigation"
         }
       ]
@@ -75,85 +111,6 @@
           "description": "Plugins to enable when running a file with Ctrl+F5, e.g. [\"clock\"]. Passed as --plugin=<name> to Klexir.Cli."
         }
       }
-    },
-    "walkthroughs": [
-      {
-        "id": "klexirTutorial",
-        "title": "Impara Klexir",
-        "description": "Dai tipi primitivi a un vero controller/service/repository, un passo alla volta.",
-        "steps": [
-          {
-            "id": "step01",
-            "title": "Tipi primitivi",
-            "description": "Int, Bool, String e il tuo primo programma.",
-            "media": { "markdown": "walkthrough/01-basics.md" },
-            "completionEvents": ["onCommand:klexir.openSample.01"]
-          },
-          {
-            "id": "step02",
-            "title": "Funzioni e closures",
-            "description": "fun, currying, applicazione parziale.",
-            "media": { "markdown": "walkthrough/02-functions.md" },
-            "completionEvents": ["onCommand:klexir.openSample.02"]
-          },
-          {
-            "id": "step03",
-            "title": "Controllo di flusso",
-            "description": "if/then/else e i confronti.",
-            "media": { "markdown": "walkthrough/03-control-flow.md" },
-            "completionEvents": ["onCommand:klexir.openSample.03"]
-          },
-          {
-            "id": "step04",
-            "title": "Option e Result",
-            "description": "Railway-oriented programming: Some/None, Ok/Err, match, bind.",
-            "media": { "markdown": "walkthrough/04-option-result.md" },
-            "completionEvents": ["onCommand:klexir.openSample.04"]
-          },
-          {
-            "id": "step05",
-            "title": "String e List",
-            "description": "Letterali, concatenazione, map/filter/fold.",
-            "media": { "markdown": "walkthrough/05-strings-lists.md" },
-            "completionEvents": ["onCommand:klexir.openSample.05"]
-          },
-          {
-            "id": "step06",
-            "title": "record: tipi prodotto",
-            "description": "Campi con nome, costruzione, accesso.",
-            "media": { "markdown": "walkthrough/06-records.md" },
-            "completionEvents": ["onCommand:klexir.openSample.06"]
-          },
-          {
-            "id": "step07",
-            "title": "union: tipi somma",
-            "description": "Varianti, costruzione curried, match esaustivo.",
-            "media": { "markdown": "walkthrough/07-unions.md" },
-            "completionEvents": ["onCommand:klexir.openSample.07"]
-          },
-          {
-            "id": "step08",
-            "title": "Ricorsione",
-            "description": "let rec: una funzione che chiama se stessa.",
-            "media": { "markdown": "walkthrough/08-recursion.md" },
-            "completionEvents": ["onCommand:klexir.openSample.08"]
-          },
-          {
-            "id": "step09",
-            "title": "Plugin",
-            "description": "Capacita' native opt-in, anche asincrone.",
-            "media": { "markdown": "walkthrough/09-plugins.md" },
-            "completionEvents": ["onCommand:klexir.openSample.09"]
-          },
-          {
-            "id": "step10",
-            "title": "Tutto insieme: controller/service/repository",
-            "description": "Tre livelli composti con bind, zero propagazione manuale.",
-            "media": { "markdown": "walkthrough/10-layered-architecture.md" },
-            "completionEvents": ["onCommand:klexir.openSample.10"]
-          }
-        ]
-      }
-    ]
+    }
   }
 }
