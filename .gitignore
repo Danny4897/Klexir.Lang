@@ -2,6 +2,9 @@ bin/
 obj/
 TestResults/
 
+# Tutorial samples copied out by the VS Code extension for hands-on editing
+klexir-tutorial/
+
 # Docs (VitePress)
 docs/node_modules/
 docs/.vitepress/dist/

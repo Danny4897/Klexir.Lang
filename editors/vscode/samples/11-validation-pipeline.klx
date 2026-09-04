@@ -1,0 +1,24 @@
+record NewUser { Age: Int, CodiceFiscale: String };
+
+// Funzione atomica 1: e' maggiorenne?
+let checkAdult = fun (u: NewUser) =>
+    if u.Age >= 18 then Ok<Int>(u) else Err<NewUser>(1);   // 1 = minorenne
+
+// Funzione atomica 2: il codice fiscale e' valorizzato?
+let checkCodiceFiscale = fun (u: NewUser) =>
+    if u.CodiceFiscale == "" then Err<NewUser>(2) else Ok<Int>(u);   // 2 = codice fiscale mancante
+
+// Funzione atomica 3: non e' gia' a DB? ("DB" simulato: un solo codice fiscale gia' noto)
+let checkNotInDb = fun (u: NewUser) =>
+    if u.CodiceFiscale == "RSSMRA80A01H501U" then Err<NewUser>(3) else Ok<Int>(u);   // 3 = gia' presente
+
+// La pipeline: ogni bind incatena la funzione successiva SOLO se la precedente e' andata bene.
+// Stessa idea di MonadicSharp (.Bind(...).Bind(...)), scritta come chiamate a funzione invece che a metodo.
+let validateNewUser = fun (u: NewUser) =>
+    bind(bind(checkAdult u, checkCodiceFiscale), checkNotInDb);
+
+// Controller: l'unico punto che trasforma il Result in una risposta semplice.
+let addUser = fun (u: NewUser) =>
+    match validateNewUser u with Ok(valid) => 0 | Err(code) => code;
+
+addUser (NewUser { Age: 25, CodiceFiscale: "ABCDEF12G34H567I" })

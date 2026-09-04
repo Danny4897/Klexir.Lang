@@ -13,6 +13,7 @@ const LESSONS = [
   { id: "08", file: "08-recursion.klx", md: "08-recursion.md", title: "Ricorsione", subtitle: "let rec" },
   { id: "09", file: "09-plugins.klx", md: "09-plugins.md", title: "Plugin", subtitle: "capacita' native opt-in" },
   { id: "10", file: "10-layered-architecture.klx", md: "10-layered-architecture.md", title: "Tutto insieme", subtitle: "controller/service/repository" },
+  { id: "11", file: "11-validation-pipeline.klx", md: "11-validation-pipeline.md", title: "Pipeline di validazione", subtitle: "piu' funzioni atomiche, stile MonadicSharp" },
 ];
 
 const COMPLETED_KEY = "klexir.completedLessons";
