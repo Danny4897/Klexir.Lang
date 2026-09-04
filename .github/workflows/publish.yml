@@ -1,4 +1,4 @@
-name: Release & Publish
+name: "Release & Publish"
 
 on:
   push:
@@ -16,7 +16,7 @@ env:
 
 jobs:
   build-and-test:
-    name: Build & Test
+    name: "Build & Test"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +28,7 @@ jobs:
       - run: dotnet test Klexir.Lang.sln --configuration Release --no-build --verbosity normal
 
   release:
-    name: Pack & Publish
+    name: "Pack & Publish"
     needs: build-and-test
     runs-on: ubuntu-latest
     steps:
@@ -78,9 +78,11 @@ jobs:
             --skip-duplicate
 
       - name: Push to NuGet.org
-        if: ${{ secrets.NUGET_API_KEY != '' }}
+        if: ${{ env.NUGET_API_KEY != '' }}
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
           dotnet nuget push ./nupkgs/*.nupkg \
-            --api-key ${{ secrets.NUGET_API_KEY }} \
+            --api-key "$NUGET_API_KEY" \
             --source https://api.nuget.org/v3/index.json \
             --skip-duplicate
