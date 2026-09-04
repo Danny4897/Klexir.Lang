@@ -5,9 +5,13 @@
   "patterns": [
     { "include": "#comments" },
     { "include": "#strings" },
+    { "include": "#function-def-name" },
+    { "include": "#parameters" },
     { "include": "#keywords" },
     { "include": "#language-constants" },
     { "include": "#booleans" },
+    { "include": "#primitive-types" },
+    { "include": "#record-fields" },
     { "include": "#types" },
     { "include": "#numbers" },
     { "include": "#operators" }
@@ -33,6 +37,30 @@
               "match": "\\\\."
             }
           ]
+        }
+      ]
+    },
+    "function-def-name": {
+      "comment": "The name bound by let/let rec — colored like C# method/local names, separately from keywords.",
+      "patterns": [
+        {
+          "match": "\\b(let)\\s+(rec\\s+)?([a-zA-Z_][A-Za-z0-9_]*)(?=\\s*=)",
+          "captures": {
+            "1": { "name": "keyword.control.klexir" },
+            "2": { "name": "keyword.control.klexir" },
+            "3": { "name": "entity.name.function.klexir" }
+          }
+        }
+      ]
+    },
+    "parameters": {
+      "comment": "The parameter name in fun (name: Type) — colored like C# parameters, separately from its type.",
+      "patterns": [
+        {
+          "match": "([(,]\\s*)([a-zA-Z_][A-Za-z0-9_]*)(\\s*:)",
+          "captures": {
+            "2": { "name": "variable.parameter.klexir" }
+          }
         }
       ]
     },
@@ -65,6 +93,26 @@
         {
           "name": "constant.language.boolean.klexir",
           "match": "\\b(true|false)\\b"
+        }
+      ]
+    },
+    "primitive-types": {
+      "comment": "Built-in ground/generic types, colored like C#'s storage.type keywords (int, string, ...) — distinct from user-declared record/union names below.",
+      "patterns": [
+        {
+          "name": "support.type.primitive.klexir",
+          "match": "\\b(Int|Bool|String|Option|Result|List)\\b"
+        }
+      ]
+    },
+    "record-fields": {
+      "comment": "Field names in a record declaration/construction (Name: Type / Name: value) — anything left over from #parameters.",
+      "patterns": [
+        {
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)(\\s*:)(?!:)",
+          "captures": {
+            "1": { "name": "variable.other.property.klexir" }
+          }
         }
       ]
     },

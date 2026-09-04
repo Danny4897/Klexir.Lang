@@ -1,0 +1,7 @@
+record User { CodiceFiscale: String, Age: Int };
+union RegistrationOutcome { Registered(Int), Rejected(Int) };
+
+let sample = User { CodiceFiscale: "RSSMRA80A01H501U", Age: 45 };
+let outcome = Rejected 3;
+
+match outcome with Registered(ts) => ts | Rejected(code) => 0 - code

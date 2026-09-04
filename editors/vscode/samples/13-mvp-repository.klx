@@ -1,0 +1,13 @@
+record User { CodiceFiscale: String, Age: Int };
+
+let existingUsers = [
+    User { CodiceFiscale: "RSSMRA80A01H501U", Age: 45 },
+    User { CodiceFiscale: "VRDLGU90B02F205X", Age: 34 }
+];
+
+let existsInRepo = fun (cf: String) =>
+    let matches = fold(filter(existingUsers, fun (u: User) => u.CodiceFiscale == cf), 0,
+        fun (acc: Int) => fun (u: User) => acc + 1) in
+    matches > 0;
+
+if existsInRepo "RSSMRA80A01H501U" then 1 else 0

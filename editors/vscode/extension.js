@@ -14,6 +14,12 @@ const LESSONS = [
   { id: "09", file: "09-plugins.klx", md: "09-plugins.md", title: "Plugin", subtitle: "capacita' native opt-in" },
   { id: "10", file: "10-layered-architecture.klx", md: "10-layered-architecture.md", title: "Tutto insieme", subtitle: "controller/service/repository" },
   { id: "11", file: "11-validation-pipeline.klx", md: "11-validation-pipeline.md", title: "Pipeline di validazione", subtitle: "piu' funzioni atomiche, stile MonadicSharp" },
+  { id: "12", file: "12-mvp-model.klx", md: "12-mvp-model.md", title: "MVP 1/6: Modella il dominio", subtitle: "record + union del risultato" },
+  { id: "13", file: "13-mvp-repository.klx", md: "13-mvp-repository.md", title: "MVP 2/6: Repository", subtitle: "una responsabilita', un motivo per cambiare" },
+  { id: "14", file: "14-mvp-validators.klx", md: "14-mvp-validators.md", title: "MVP 3/6: Validatori atomici", subtitle: "firme identiche, componibili" },
+  { id: "15", file: "15-mvp-service.klx", md: "15-mvp-service.md", title: "MVP 4/6: Service", subtitle: "orchestrazione via andThen" },
+  { id: "16", file: "16-mvp-controller.klx", md: "16-mvp-controller.md", title: "MVP 5/6: Controller + plugin", subtitle: "Result -> risposta, timestamp reale" },
+  { id: "17", file: "17-mvp-complete.klx", md: "17-mvp-complete.md", title: "MVP 6/6: Programma completo", subtitle: "checklist di clean code" },
 ];
 
 const COMPLETED_KEY = "klexir.completedLessons";
