@@ -47,12 +47,14 @@ if (command is null || path is null)
                                                            (HttpRequest -> HttpResponse); Ctrl+C to stop
 
         Available plugins (run/serve only — compile doesn't support plugins yet):
-          clock     now/delay — see Klexir.Lang.Plugins.ClockPlugin
+          clock       now/delay — see Klexir.Lang.Plugins.ClockPlugin
+          eventflow   subscribe/publish over a real Klexir.EventFlow.InMemoryEventBus
 
         Example:
           klexir new MyApp
           klexir run hello.klx
           klexir run --plugin=clock uses-clock.klx
+          klexir run --plugin=eventflow events.klx
           klexir compile hello.klx
           klexir serve --port=5000 api.klx
         """);
@@ -70,10 +72,12 @@ if (command == "compile")
     return await RunCompiled(path);
 }
 
+var evaluator = new Evaluator();
+
 IReadOnlyList<IKlexirPlugin> plugins;
 try
 {
-    plugins = pluginNames.Select(ResolvePlugin).ToList();
+    plugins = pluginNames.Select(name => ResolvePlugin(name, evaluator)).ToList();
 }
 catch (ArgumentException ex)
 {
@@ -104,7 +108,7 @@ if (typed.IsFailure)
     return 1;
 }
 
-var result = await new Evaluator().EvaluateAsync(typed.Value, plugins);
+var result = await evaluator.EvaluateAsync(typed.Value, plugins);
 if (result.IsFailure)
 {
     Console.Error.WriteLine($"{path}: runtime error: {result.Error.Message}");
@@ -192,10 +196,12 @@ static async Task<int> Serve(string path, int port, IReadOnlyList<string> plugin
         return 2;
     }
 
+    var evaluator = new Evaluator();
+
     IReadOnlyList<IKlexirPlugin> plugins;
     try
     {
-        plugins = pluginNames.Select(ResolvePlugin).ToList();
+        plugins = pluginNames.Select(name => ResolvePlugin(name, evaluator)).ToList();
     }
     catch (ArgumentException ex)
     {
@@ -233,7 +239,6 @@ static async Task<int> Serve(string path, int port, IReadOnlyList<string> plugin
         return 1;
     }
 
-    var evaluator = new Evaluator();
     var handlerResult = await evaluator.EvaluateAsync(typed.Value, plugins);
     if (handlerResult.IsFailure)
     {
@@ -343,8 +348,9 @@ static int CreateProjectFromTemplate(string projectName, string targetDir)
     return 0;
 }
 
-static IKlexirPlugin ResolvePlugin(string name) => name.ToLowerInvariant() switch
+static IKlexirPlugin ResolvePlugin(string name, Evaluator evaluator) => name.ToLowerInvariant() switch
 {
     "clock" => new ClockPlugin(),
-    _ => throw new ArgumentException($"unknown plugin '{name}' (available: clock)"),
+    "eventflow" => new EventFlowPlugin(evaluator),
+    _ => throw new ArgumentException($"unknown plugin '{name}' (available: clock, eventflow)"),
 };

@@ -21,6 +21,7 @@ const LESSONS = [
   { id: "16", file: "16-mvp-controller.klx", md: "16-mvp-controller.md", title: "MVP 5/6: Controller + plugin", subtitle: "Result -> risposta, timestamp reale" },
   { id: "17", file: "17-mvp-complete.klx", md: "17-mvp-complete.md", title: "MVP 6/6: Programma completo", subtitle: "checklist di clean code" },
   { id: "18", file: "18-http-endpoint.klx", md: "18-http-endpoint.md", title: "Endpoint HTTP vero", subtitle: "klexir serve — I/O che guida Klexir" },
+  { id: "19", file: "19-eventflow.klx", md: "19-eventflow.md", title: "Pub/sub con EventFlow", subtitle: "il primo pezzo dell'ecosistema, collegato per davvero" },
 ];
 
 const COMPLETED_KEY = "klexir.completedLessons";

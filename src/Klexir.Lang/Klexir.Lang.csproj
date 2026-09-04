@@ -14,5 +14,8 @@
     -->
     <ProjectReference Include="..\..\..\Klexir.Runtime\src\Klexir.Runtime.Abstractions\Klexir.Runtime.Abstractions.csproj" />
     <ProjectReference Include="..\..\..\Klexir.Runtime\src\Klexir.Runtime\Klexir.Runtime.csproj" />
+    <!-- TEMPORARY, same reasoning as Klexir.Runtime above: Klexir.EventFlow isn't published anywhere yet. -->
+    <ProjectReference Include="..\..\..\Klexir.EventFlow\src\Klexir.EventFlow.Abstractions\Klexir.EventFlow.Abstractions.csproj" />
+    <ProjectReference Include="..\..\..\Klexir.EventFlow\src\Klexir.EventFlow\Klexir.EventFlow.csproj" />
   </ItemGroup>
 </Project>

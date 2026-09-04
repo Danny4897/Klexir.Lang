@@ -1,0 +1,6 @@
+// Esegui con: klexir run --plugin=eventflow 19-eventflow.klx
+// subscribe registra una closure per un tag evento; publish fa girare TUTTI i subscriber di quel tag,
+// davvero, tramite Klexir.EventFlow.InMemoryEventBus (non una simulazione).
+let registered = subscribe "UserRegistered" (func(String email) => email == "alice@example.com");
+
+publish "UserRegistered" "alice@example.com"
