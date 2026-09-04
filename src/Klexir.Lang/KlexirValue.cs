@@ -65,3 +65,15 @@ public sealed record UnionValue(string VariantName, IReadOnlyList<KlexirValue> F
 /// one more argument, or — once <c>AppliedArgs</c> reaches <c>Arity</c> — the finished <see cref="UnionValue"/>.
 /// </summary>
 public sealed record ConstructorValue(string VariantName, int Arity, IReadOnlyList<KlexirValue> AppliedArgs) : KlexirValue;
+
+/// <summary>Wraps an arbitrary native .NET object behind a plugin's <see cref="OpaqueType"/> — Klexir code can hold,
+/// pass, and return it, but only a plugin's own functions can look inside <see cref="Payload"/>.</summary>
+public sealed record NativeValue(object Payload, OpaqueType Type) : KlexirValue;
+
+/// <summary>
+/// A plugin's native function mid-currying, mirroring <see cref="ConstructorValue"/>: <c>Def.Arity</c> arguments
+/// declared, <c>AppliedArgs</c> supplied so far. Applying it (see <see cref="Evaluator"/>'s <c>ApplyClosureAsync</c>)
+/// either yields another <see cref="NativeFunctionValue"/> with one more argument, or — once <c>AppliedArgs</c>
+/// reaches <c>Def.Arity</c> — awaits <see cref="KlexirNativeFunctionDef.Invoke"/> with the full argument list.
+/// </summary>
+public sealed record NativeFunctionValue(KlexirNativeFunctionDef Def, IReadOnlyList<KlexirValue> AppliedArgs) : KlexirValue;

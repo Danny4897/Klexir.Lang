@@ -117,6 +117,22 @@ let area = fun (s: Shape) => match s with Circle(r) => r * r * 3 | Rectangle(w, 
 area (Rectangle 3 5)   // 15
 ```
 
+A plugin adds native, possibly-async capabilities to a program's environment — a compile-time whitelist the host builds, not something a `.klx` file chooses for itself. `Klexir.Lang.Plugins.ClockPlugin` is the reference implementation; its functions are ordinary curried Klexir functions once bound in, no special call syntax:
+
+```csharp
+var plugins = new IKlexirPlugin[] { new ClockPlugin() };
+var typed = new TypeChecker().Check(ast, plugins);
+var result = await new Evaluator().EvaluateAsync(typed.Value, plugins);
+```
+
+```
+delay 5   // awaits 5ms for real, then returns 5 — a native function can do actual I/O, not just pure computation
+```
+
+```bash
+$ dotnet run --project src/Klexir.Cli -- run --plugin=clock uses-clock.klx
+```
+
 ---
 
 ## What's in the box
@@ -142,6 +158,7 @@ area (Rectangle 3 5)   // 15
 | `List<T>` | `[e1, e2, ...]`, `[]<T>`, `KlexirType.ListType` | Element type inferred from the elements (must all agree); an empty list needs its type written explicitly, same as `None` |
 | List ops | `map(list, fn)`, `filter(list, predicate)`, `fold(list, initial, folder)` | `map` doubles as List's Functor op; `filter` keeps elements where `predicate` is `true`; `fold` is left-fold with a curried `Acc -> Elem -> Acc` folder |
 | MonadicSharp bridge | `KlexirInterop.ToOption/ToResult/FromOption/FromResult`, `AsInt/AsBool/AsString` | Converts a Klexir `Some`/`None`/`Ok`/`Err` value to/from a real `MonadicSharp.Option<T>`/`Result<T>` — a hosting .NET app gets the type it already works with, not a `KlexirValue` tree to pattern-match by hand |
+| Plugins | `IKlexirPlugin`, `TypeChecker.Check(ast, plugins)`, `Evaluator.EvaluateAsync(typed, plugins)` | A compile-time whitelist of native capabilities a host opts a program into — not a runtime-discovered assembly, nothing a `.klx` file itself chooses. A plugin declares native functions (ordinary curried Klexir functions backed by a `Func<args, Task<Result<KlexirValue>>>`, so real async I/O works) and opaque types (nominal, passed between plugin functions, never constructed or pattern-matched from Klexir source). `Klexir.Lang.Plugins.ClockPlugin` (`now`, `delay`) is the reference implementation; `Klexir.Cli` opts in via `--plugin=clock` |
 
 ### Language sample
 
@@ -202,7 +219,7 @@ A Klexir *program* — not just an expression — runs end to end today; `Option
 
 1. **A compiler to `Klexir.Runtime` bytecode.** The evaluator interprets the AST directly (tree-walking) — there's no IR, no codegen, no way to produce a standalone `.klx` bytecode file `Klexir.Runtime` can run without this repo present. (`Klexir.Runtime` also has no local-variable or jump opcodes yet, which a real codegen would need.)
 2. **No generics, no recursive ADTs.** `record`/`union` give you product and sum types, but nothing in Klexir is generic — no user-defined `Pair<A, B>`, no function that works over any `T`. A `union` also can't reference its own type in a variant's field (no `Cons(Int, IntList)` inside `union IntList`'s own declaration) — self-reference resolves against whatever the name meant *before* this declaration, not the one being written, so a real linked-list/tree ADT isn't expressible yet. No modules, no I/O, no negative integer literals either. A record/union type name that's never actually constructed or matched on also isn't validated against a real declaration — a typo in an unused parameter's type silently type-checks (see `RecordType`'s doc comment in `TypedExpr.cs`).
-3. **Calling .NET *from* Klexir.** `KlexirInterop` bridges Klexir values *out* to real MonadicSharp types for a hosting app to consume — but Klexir code itself still can't call an arbitrary C# method or use a .NET library; the bridge is one-directional at the language boundary, not a general FFI.
+3. **Calling .NET *from* Klexir is curated, not general.** `IKlexirPlugin` lets a host bind native async functions and opaque types into a Klexir program's environment (see the Plugins row above), so Klexir code *can* call into .NET now — but only through a compile-time whitelist the host builds and hands over. There's still no way for `.klx` source itself to reach an arbitrary C# method or reference a .NET library directly; that would need real FFI syntax and reflection-based signature ingestion, not just a curated plugin list.
 
 **If the goal is "build a real solution using Result-oriented, railway-style code today,"** [MonadicSharp](https://www.nuget.org/packages/MonadicSharp/) is still where you'd do it, in C#, in production, right now — Klexir.Lang can express the same `bind`/`map` chains and record/union-shaped data as actual language syntax and hand the result back to MonadicSharp via `KlexirInterop`, but a real compiler backend, generics, and recursive ADTs are still the bigger remaining project.
 

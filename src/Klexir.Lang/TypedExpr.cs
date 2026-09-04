@@ -70,6 +70,18 @@ public sealed record UnionType(string Name, IReadOnlyList<(string VariantName, I
     public override string ToString() => Name;
 }
 
+/// <summary>A native type introduced by an <see cref="IKlexirPlugin"/> — nominal like <see cref="RecordType"/>, but
+/// Klexir code can only receive and pass its values through the plugin's own functions, never construct or
+/// pattern-match one directly.</summary>
+public sealed record OpaqueType(string Name) : KlexirType
+{
+    public bool Equals(OpaqueType? other) => other is not null && Name == other.Name;
+
+    public override int GetHashCode() => Name.GetHashCode();
+
+    public override string ToString() => Name;
+}
+
 public abstract record TypedExpr(KlexirType Type);
 
 public sealed record TypedIntLiteral(long Value) : TypedExpr(KlexirType.Int);

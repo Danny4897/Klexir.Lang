@@ -1,6 +1,13 @@
 using Klexir.Lang;
+using Klexir.Lang.Plugins;
 
-var (command, path) = args switch
+var pluginNames = args.Where(a => a.StartsWith("--plugin=", StringComparison.OrdinalIgnoreCase))
+    .Select(a => a["--plugin=".Length..])
+    .ToList();
+
+var positional = args.Where(a => !a.StartsWith("--plugin=", StringComparison.OrdinalIgnoreCase)).ToArray();
+
+var (command, path) = positional switch
 {
     ["run", var file] => ("run", file),
     [var file] when file.EndsWith(".klx", StringComparison.OrdinalIgnoreCase) => ("run", file),
@@ -11,10 +18,14 @@ if (command is null || path is null)
 {
     Console.Error.WriteLine("""
         Usage:
-          klexir run <file.klx>     Run a Klexir program
+          klexir run [--plugin=<name>]... <file.klx>     Run a Klexir program
+
+        Available plugins:
+          clock     now/delay — see Klexir.Lang.Plugins.ClockPlugin
 
         Example:
           klexir run hello.klx
+          klexir run --plugin=clock uses-clock.klx
         """);
     return 2;
 }
@@ -22,6 +33,17 @@ if (command is null || path is null)
 if (!File.Exists(path))
 {
     Console.Error.WriteLine($"error: no such file '{path}'");
+    return 2;
+}
+
+IReadOnlyList<IKlexirPlugin> plugins;
+try
+{
+    plugins = pluginNames.Select(ResolvePlugin).ToList();
+}
+catch (ArgumentException ex)
+{
+    Console.Error.WriteLine($"error: {ex.Message}");
     return 2;
 }
 
@@ -41,14 +63,14 @@ if (ast.IsFailure)
     return 1;
 }
 
-var typed = new TypeChecker().Check(ast.Value);
+var typed = new TypeChecker().Check(ast.Value, plugins);
 if (typed.IsFailure)
 {
     Console.Error.WriteLine($"{path}: type error: {typed.Error.Message}");
     return 1;
 }
 
-var result = new Evaluator().Evaluate(typed.Value);
+var result = await new Evaluator().EvaluateAsync(typed.Value, plugins);
 if (result.IsFailure)
 {
     Console.Error.WriteLine($"{path}: runtime error: {result.Error.Message}");
@@ -73,5 +95,13 @@ static string Format(KlexirValue value) => value switch
     UnionValue v => $"{v.VariantName}({string.Join(", ", v.Fields.Select(Format))})",
     ClosureValue => "<function>",
     ConstructorValue v => $"<constructor {v.VariantName}>",
+    NativeValue v => $"<{v.Type.Name}>",
+    NativeFunctionValue v => $"<function {v.Def.Name}>",
     _ => value.ToString() ?? "?",
+};
+
+static IKlexirPlugin ResolvePlugin(string name) => name.ToLowerInvariant() switch
+{
+    "clock" => new ClockPlugin(),
+    _ => throw new ArgumentException($"unknown plugin '{name}' (available: clock)"),
 };

@@ -7,6 +7,44 @@ public sealed class TypeChecker
 {
     public Result<TypedExpr> Check(Expr expr) => Check(expr, new Dictionary<string, KlexirType>());
 
+    /// <summary>Type-checks <paramref name="expr"/> with the given plugins' functions and types bound into the
+    /// initial identifier environment — see <see cref="IKlexirPlugin"/>.</summary>
+    public Result<TypedExpr> Check(Expr expr, IReadOnlyList<IKlexirPlugin> plugins)
+    {
+        var environment = BuildPluginEnvironment(plugins);
+        return environment.IsFailure
+            ? Result<TypedExpr>.Failure(environment.Error)
+            : Check(expr, environment.Value);
+    }
+
+    private static Result<IReadOnlyDictionary<string, KlexirType>> BuildPluginEnvironment(IReadOnlyList<IKlexirPlugin> plugins)
+    {
+        var environment = new Dictionary<string, KlexirType>();
+
+        foreach (var plugin in plugins)
+        {
+            foreach (var type in plugin.Types)
+            {
+                if (!environment.TryAdd(type.Name, type))
+                {
+                    return Result<IReadOnlyDictionary<string, KlexirType>>.Failure(
+                        Error.Create($"Plugin '{plugin.Name}' declares type '{type.Name}', which is already bound."));
+                }
+            }
+
+            foreach (var function in plugin.Functions)
+            {
+                if (!environment.TryAdd(function.Name, function.Type))
+                {
+                    return Result<IReadOnlyDictionary<string, KlexirType>>.Failure(
+                        Error.Create($"Plugin '{plugin.Name}' declares function '{function.Name}', which is already bound."));
+                }
+            }
+        }
+
+        return Result<IReadOnlyDictionary<string, KlexirType>>.Success(environment);
+    }
+
     private static Result<TypedExpr> Check(Expr expr, IReadOnlyDictionary<string, KlexirType> environment) =>
         expr switch
         {
@@ -566,7 +604,7 @@ public sealed class TypeChecker
     private static KlexirType ResolveType(KlexirType type, IReadOnlyDictionary<string, KlexirType> environment) =>
         type switch
         {
-            RecordType placeholder when environment.TryGetValue(placeholder.Name, out var resolved) && resolved is RecordType or UnionType => resolved,
+            RecordType placeholder when environment.TryGetValue(placeholder.Name, out var resolved) && resolved is RecordType or UnionType or OpaqueType => resolved,
             OptionType option => new OptionType(ResolveType(option.Element, environment)),
             ResultType result => new ResultType(ResolveType(result.Ok, environment), ResolveType(result.Err, environment)),
             ListType list => new ListType(ResolveType(list.Element, environment)),

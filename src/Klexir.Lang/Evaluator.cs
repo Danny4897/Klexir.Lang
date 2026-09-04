@@ -6,132 +6,303 @@ namespace Klexir.Lang;
 /// Tree-walking evaluator over a <see cref="TypedExpr"/> tree. Expects its input already passed
 /// <see cref="TypeChecker"/> — operand-type guards below exist so a bug upstream fails the <see cref="Result{T}"/>
 /// instead of throwing an <see cref="InvalidCastException"/>, not because this is meant to re-validate types.
+/// Async throughout because a plugin's native function (see <see cref="IKlexirPlugin"/>) may do real I/O; the
+/// synchronous <see cref="Evaluate(TypedExpr)"/> overload just blocks on it for plugin-free programs, where nothing
+/// ever actually suspends.
 /// </summary>
 public sealed class Evaluator
 {
-    public Result<KlexirValue> Evaluate(TypedExpr expr) => Evaluate(expr, new Dictionary<string, KlexirValue>());
+    public Result<KlexirValue> Evaluate(TypedExpr expr) =>
+        EvaluateAsync(expr, new Dictionary<string, KlexirValue>()).GetAwaiter().GetResult();
 
-    private static Result<KlexirValue> Evaluate(TypedExpr expr, IReadOnlyDictionary<string, KlexirValue> environment) =>
-        expr switch
+    public Task<Result<KlexirValue>> EvaluateAsync(TypedExpr expr) =>
+        EvaluateAsync(expr, Array.Empty<IKlexirPlugin>());
+
+    /// <summary>Evaluates <paramref name="expr"/> with the given plugins' functions bound into the initial value
+    /// environment — see <see cref="IKlexirPlugin"/>. <paramref name="expr"/> should have been type-checked against
+    /// the same plugin list via <see cref="TypeChecker.Check(Expr, IReadOnlyList{IKlexirPlugin})"/>.</summary>
+    public Task<Result<KlexirValue>> EvaluateAsync(TypedExpr expr, IReadOnlyList<IKlexirPlugin> plugins)
+    {
+        var environment = BuildPluginEnvironment(plugins);
+        return environment.IsFailure
+            ? Task.FromResult(Result<KlexirValue>.Failure(environment.Error))
+            : EvaluateAsync(expr, environment.Value);
+    }
+
+    private static Result<IReadOnlyDictionary<string, KlexirValue>> BuildPluginEnvironment(IReadOnlyList<IKlexirPlugin> plugins)
+    {
+        var environment = new Dictionary<string, KlexirValue>();
+
+        foreach (var plugin in plugins)
         {
-            TypedIntLiteral literal => Result<KlexirValue>.Success(new IntValue(literal.Value)),
-
-            TypedStringLiteral literal => Result<KlexirValue>.Success(new StringValue(literal.Value)),
-
-            TypedBoolLiteral literal => Result<KlexirValue>.Success(new BoolValue(literal.Value)),
-
-            TypedIdentifier identifier => environment.TryGetValue(identifier.Name, out var value)
-                ? Result<KlexirValue>.Success(value)
-                : Result<KlexirValue>.Failure(Error.Create($"Unbound identifier '{identifier.Name}' at evaluation time.")),
-
-            TypedBinaryExpr binary => Evaluate(binary.Left, environment)
-                .Bind(left => Evaluate(binary.Right, environment)
-                    .Bind(right => ApplyBinary(binary.Operator, left, right))),
-
-            TypedComparisonExpr comparison => Evaluate(comparison.Left, environment)
-                .Bind(left => Evaluate(comparison.Right, environment)
-                    .Bind(right => ApplyComparison(comparison.Operator, left, right))),
-
-            TypedIfExpr ifExpr => Evaluate(ifExpr.Condition, environment)
-                .Bind(condition => condition is BoolValue { Value: true }
-                    ? Evaluate(ifExpr.Then, environment)
-                    : condition is BoolValue { Value: false }
-                        ? Evaluate(ifExpr.Else, environment)
-                        : Result<KlexirValue>.Failure(Error.Create("If condition did not evaluate to Bool."))),
-
-            TypedLetExpr let => Evaluate(let.Value, environment)
-                .Bind(value => Evaluate(let.Body, WithBinding(environment, let.Name, value))),
-
-            TypedFunExpr fun => Result<KlexirValue>.Success(new ClosureValue(fun.ParamName, fun.Body, environment)),
-
-            TypedAppExpr app => Evaluate(app.Function, environment)
-                .Bind(function => Evaluate(app.Argument, environment)
-                    .Bind(argument => ApplyClosure(function, argument))),
-
-            TypedLetRecExpr letRec => EvaluateLetRec(letRec, environment),
-
-            TypedSomeExpr some => Evaluate(some.Value, environment)
-                .Bind(value => Result<KlexirValue>.Success(new SomeValue(value))),
-
-            TypedNoneExpr => Result<KlexirValue>.Success(new NoneValue()),
-
-            TypedOkExpr ok => Evaluate(ok.Value, environment)
-                .Bind(value => Result<KlexirValue>.Success(new OkValue(value))),
-
-            TypedErrExpr err => Evaluate(err.Value, environment)
-                .Bind(value => Result<KlexirValue>.Success(new ErrValue(value))),
-
-            TypedMatchOptionExpr match => Evaluate(match.Scrutinee, environment)
-                .Bind(scrutinee => scrutinee switch
+            foreach (var function in plugin.Functions)
+            {
+                if (!environment.TryAdd(function.Name, new NativeFunctionValue(function, Array.Empty<KlexirValue>())))
                 {
-                    SomeValue some => Evaluate(match.SomeBody, WithBinding(environment, match.SomeBinder, some.Value)),
-                    NoneValue => Evaluate(match.NoneBody, environment),
+                    return Result<IReadOnlyDictionary<string, KlexirValue>>.Failure(
+                        Error.Create($"Plugin '{plugin.Name}' declares function '{function.Name}', which is already bound."));
+                }
+            }
+        }
+
+        return Result<IReadOnlyDictionary<string, KlexirValue>>.Success(environment);
+    }
+
+    private static async Task<Result<KlexirValue>> EvaluateAsync(TypedExpr expr, IReadOnlyDictionary<string, KlexirValue> environment)
+    {
+        switch (expr)
+        {
+            case TypedIntLiteral literal:
+                return Result<KlexirValue>.Success(new IntValue(literal.Value));
+
+            case TypedStringLiteral literal:
+                return Result<KlexirValue>.Success(new StringValue(literal.Value));
+
+            case TypedBoolLiteral literal:
+                return Result<KlexirValue>.Success(new BoolValue(literal.Value));
+
+            case TypedIdentifier identifier:
+                return environment.TryGetValue(identifier.Name, out var boundValue)
+                    ? Result<KlexirValue>.Success(boundValue)
+                    : Result<KlexirValue>.Failure(Error.Create($"Unbound identifier '{identifier.Name}' at evaluation time."));
+
+            case TypedBinaryExpr binary:
+            {
+                var leftResult = await EvaluateAsync(binary.Left, environment);
+                if (leftResult.IsFailure)
+                {
+                    return leftResult;
+                }
+
+                var rightResult = await EvaluateAsync(binary.Right, environment);
+                return rightResult.IsFailure ? rightResult : ApplyBinary(binary.Operator, leftResult.Value, rightResult.Value);
+            }
+
+            case TypedComparisonExpr comparison:
+            {
+                var leftResult = await EvaluateAsync(comparison.Left, environment);
+                if (leftResult.IsFailure)
+                {
+                    return leftResult;
+                }
+
+                var rightResult = await EvaluateAsync(comparison.Right, environment);
+                return rightResult.IsFailure ? rightResult : ApplyComparison(comparison.Operator, leftResult.Value, rightResult.Value);
+            }
+
+            case TypedIfExpr ifExpr:
+            {
+                var conditionResult = await EvaluateAsync(ifExpr.Condition, environment);
+                if (conditionResult.IsFailure)
+                {
+                    return conditionResult;
+                }
+
+                return conditionResult.Value switch
+                {
+                    BoolValue { Value: true } => await EvaluateAsync(ifExpr.Then, environment),
+                    BoolValue { Value: false } => await EvaluateAsync(ifExpr.Else, environment),
+                    _ => Result<KlexirValue>.Failure(Error.Create("If condition did not evaluate to Bool.")),
+                };
+            }
+
+            case TypedLetExpr let:
+            {
+                var valueResult = await EvaluateAsync(let.Value, environment);
+                return valueResult.IsFailure
+                    ? valueResult
+                    : await EvaluateAsync(let.Body, WithBinding(environment, let.Name, valueResult.Value));
+            }
+
+            case TypedFunExpr fun:
+                return Result<KlexirValue>.Success(new ClosureValue(fun.ParamName, fun.Body, environment));
+
+            case TypedAppExpr app:
+            {
+                var functionResult = await EvaluateAsync(app.Function, environment);
+                if (functionResult.IsFailure)
+                {
+                    return functionResult;
+                }
+
+                var argumentResult = await EvaluateAsync(app.Argument, environment);
+                return argumentResult.IsFailure
+                    ? argumentResult
+                    : await ApplyClosureAsync(functionResult.Value, argumentResult.Value);
+            }
+
+            case TypedLetRecExpr letRec:
+                return await EvaluateLetRecAsync(letRec, environment);
+
+            case TypedSomeExpr some:
+            {
+                var valueResult = await EvaluateAsync(some.Value, environment);
+                return valueResult.IsFailure ? valueResult : Result<KlexirValue>.Success(new SomeValue(valueResult.Value));
+            }
+
+            case TypedNoneExpr:
+                return Result<KlexirValue>.Success(new NoneValue());
+
+            case TypedOkExpr ok:
+            {
+                var valueResult = await EvaluateAsync(ok.Value, environment);
+                return valueResult.IsFailure ? valueResult : Result<KlexirValue>.Success(new OkValue(valueResult.Value));
+            }
+
+            case TypedErrExpr err:
+            {
+                var valueResult = await EvaluateAsync(err.Value, environment);
+                return valueResult.IsFailure ? valueResult : Result<KlexirValue>.Success(new ErrValue(valueResult.Value));
+            }
+
+            case TypedMatchOptionExpr match:
+            {
+                var scrutineeResult = await EvaluateAsync(match.Scrutinee, environment);
+                if (scrutineeResult.IsFailure)
+                {
+                    return scrutineeResult;
+                }
+
+                return scrutineeResult.Value switch
+                {
+                    SomeValue some => await EvaluateAsync(match.SomeBody, WithBinding(environment, match.SomeBinder, some.Value)),
+                    NoneValue => await EvaluateAsync(match.NoneBody, environment),
                     _ => Result<KlexirValue>.Failure(Error.Create("Match scrutinee did not evaluate to an Option value.")),
-                }),
+                };
+            }
 
-            TypedMatchResultExpr match => Evaluate(match.Scrutinee, environment)
-                .Bind(scrutinee => scrutinee switch
+            case TypedMatchResultExpr match:
+            {
+                var scrutineeResult = await EvaluateAsync(match.Scrutinee, environment);
+                if (scrutineeResult.IsFailure)
                 {
-                    OkValue ok => Evaluate(match.OkBody, WithBinding(environment, match.OkBinder, ok.Value)),
-                    ErrValue err => Evaluate(match.ErrBody, WithBinding(environment, match.ErrBinder, err.Value)),
+                    return scrutineeResult;
+                }
+
+                return scrutineeResult.Value switch
+                {
+                    OkValue ok => await EvaluateAsync(match.OkBody, WithBinding(environment, match.OkBinder, ok.Value)),
+                    ErrValue err => await EvaluateAsync(match.ErrBody, WithBinding(environment, match.ErrBinder, err.Value)),
                     _ => Result<KlexirValue>.Failure(Error.Create("Match scrutinee did not evaluate to a Result value.")),
-                }),
+                };
+            }
 
-            TypedMapExpr map => Evaluate(map.Container, environment)
-                .Bind(container => Evaluate(map.Mapper, environment)
-                    .Bind(mapper => ApplyMap(container, mapper))),
+            case TypedMapExpr map:
+            {
+                var containerResult = await EvaluateAsync(map.Container, environment);
+                if (containerResult.IsFailure)
+                {
+                    return containerResult;
+                }
 
-            TypedBindExpr bind => Evaluate(bind.Container, environment)
-                .Bind(container => Evaluate(bind.Mapper, environment)
-                    .Bind(mapper => ApplyBind(container, mapper))),
+                var mapperResult = await EvaluateAsync(map.Mapper, environment);
+                return mapperResult.IsFailure ? mapperResult : await ApplyMapAsync(containerResult.Value, mapperResult.Value);
+            }
 
-            TypedListExpr list => EvaluateList(list.Elements, environment),
+            case TypedBindExpr bind:
+            {
+                var containerResult = await EvaluateAsync(bind.Container, environment);
+                if (containerResult.IsFailure)
+                {
+                    return containerResult;
+                }
 
-            TypedEmptyListExpr => Result<KlexirValue>.Success(new ListValue(Array.Empty<KlexirValue>())),
+                var mapperResult = await EvaluateAsync(bind.Mapper, environment);
+                return mapperResult.IsFailure ? mapperResult : await ApplyBindAsync(containerResult.Value, mapperResult.Value);
+            }
 
-            TypedFilterExpr filter => Evaluate(filter.List, environment)
-                .Bind(list => Evaluate(filter.Predicate, environment)
-                    .Bind(predicate => ApplyFilter(list, predicate))),
+            case TypedListExpr list:
+                return await EvaluateListAsync(list.Elements, environment);
 
-            TypedFoldExpr fold => Evaluate(fold.List, environment)
-                .Bind(list => Evaluate(fold.Initial, environment)
-                    .Bind(initial => Evaluate(fold.Folder, environment)
-                        .Bind(folder => ApplyFold(list, initial, folder)))),
+            case TypedEmptyListExpr:
+                return Result<KlexirValue>.Success(new ListValue(Array.Empty<KlexirValue>()));
 
-            TypedRecordConstructExpr construct => EvaluateRecordConstruct(construct, environment),
+            case TypedFilterExpr filter:
+            {
+                var listResult = await EvaluateAsync(filter.List, environment);
+                if (listResult.IsFailure)
+                {
+                    return listResult;
+                }
 
-            TypedFieldAccessExpr access => Evaluate(access.Receiver, environment)
-                .Bind(receiver => receiver is RecordValue record && record.Fields.TryGetValue(access.FieldName, out var value)
-                    ? Result<KlexirValue>.Success(value)
-                    : Result<KlexirValue>.Failure(Error.Create($"Attempted to access field '{access.FieldName}' on a non-record value."))),
+                var predicateResult = await EvaluateAsync(filter.Predicate, environment);
+                return predicateResult.IsFailure ? predicateResult : await ApplyFilterAsync(listResult.Value, predicateResult.Value);
+            }
 
-            TypedUnionDeclExpr decl => EvaluateUnionDecl(decl, environment),
+            case TypedFoldExpr fold:
+            {
+                var listResult = await EvaluateAsync(fold.List, environment);
+                if (listResult.IsFailure)
+                {
+                    return listResult;
+                }
 
-            TypedMatchUnionExpr match => Evaluate(match.Scrutinee, environment)
-                .Bind(scrutinee => scrutinee is UnionValue union
-                    ? EvaluateMatchUnionArm(match.Arms, union, environment)
-                    : Result<KlexirValue>.Failure(Error.Create("Match scrutinee did not evaluate to a union value."))),
+                var initialResult = await EvaluateAsync(fold.Initial, environment);
+                if (initialResult.IsFailure)
+                {
+                    return initialResult;
+                }
 
-            _ => Result<KlexirValue>.Failure(Error.Create($"Unsupported typed node '{expr.GetType().Name}'.")),
-        };
+                var folderResult = await EvaluateAsync(fold.Folder, environment);
+                return folderResult.IsFailure
+                    ? folderResult
+                    : await ApplyFoldAsync(listResult.Value, initialResult.Value, folderResult.Value);
+            }
 
-    private static Result<KlexirValue> EvaluateUnionDecl(TypedUnionDeclExpr decl, IReadOnlyDictionary<string, KlexirValue> environment)
+            case TypedRecordConstructExpr construct:
+                return await EvaluateRecordConstructAsync(construct, environment);
+
+            case TypedFieldAccessExpr access:
+            {
+                var receiverResult = await EvaluateAsync(access.Receiver, environment);
+                if (receiverResult.IsFailure)
+                {
+                    return receiverResult;
+                }
+
+                return receiverResult.Value is RecordValue record && record.Fields.TryGetValue(access.FieldName, out var fieldValue)
+                    ? Result<KlexirValue>.Success(fieldValue)
+                    : Result<KlexirValue>.Failure(Error.Create($"Attempted to access field '{access.FieldName}' on a non-record value."));
+            }
+
+            case TypedUnionDeclExpr decl:
+                return await EvaluateUnionDeclAsync(decl, environment);
+
+            case TypedMatchUnionExpr match:
+            {
+                var scrutineeResult = await EvaluateAsync(match.Scrutinee, environment);
+                if (scrutineeResult.IsFailure)
+                {
+                    return scrutineeResult;
+                }
+
+                return scrutineeResult.Value is UnionValue union
+                    ? await EvaluateMatchUnionArmAsync(match.Arms, union, environment)
+                    : Result<KlexirValue>.Failure(Error.Create("Match scrutinee did not evaluate to a union value."));
+            }
+
+            default:
+                return Result<KlexirValue>.Failure(Error.Create($"Unsupported typed node '{expr.GetType().Name}'."));
+        }
+    }
+
+    private static async Task<Result<KlexirValue>> EvaluateUnionDeclAsync(TypedUnionDeclExpr decl, IReadOnlyDictionary<string, KlexirValue> environment)
     {
         var bodyEnvironment = environment;
 
         foreach (var (variantName, arity) in decl.Constructors)
         {
             KlexirValue constructorValue = arity == 0
-                ? new UnionValue(variantName, [])
-                : new ConstructorValue(variantName, arity, []);
+                ? new UnionValue(variantName, Array.Empty<KlexirValue>())
+                : new ConstructorValue(variantName, arity, Array.Empty<KlexirValue>());
 
             bodyEnvironment = WithBinding(bodyEnvironment, variantName, constructorValue);
         }
 
-        return Evaluate(decl.Body, bodyEnvironment);
+        return await EvaluateAsync(decl.Body, bodyEnvironment);
     }
 
-    private static Result<KlexirValue> EvaluateMatchUnionArm(
+    private static async Task<Result<KlexirValue>> EvaluateMatchUnionArmAsync(
         IReadOnlyList<(string VariantName, IReadOnlyList<string> Binders, TypedExpr Body)> arms,
         UnionValue union, IReadOnlyDictionary<string, KlexirValue> environment)
     {
@@ -148,20 +319,20 @@ public sealed class Evaluator
                 armEnvironment = WithBinding(armEnvironment, binders[i], union.Fields[i]);
             }
 
-            return Evaluate(body, armEnvironment);
+            return await EvaluateAsync(body, armEnvironment);
         }
 
         return Result<KlexirValue>.Failure(Error.Create($"No match arm for variant '{union.VariantName}'."));
     }
 
-    private static Result<KlexirValue> EvaluateRecordConstruct(
+    private static async Task<Result<KlexirValue>> EvaluateRecordConstructAsync(
         TypedRecordConstructExpr construct, IReadOnlyDictionary<string, KlexirValue> environment)
     {
         var fields = new Dictionary<string, KlexirValue>();
 
         foreach (var (fieldName, fieldExpr) in construct.Fields)
         {
-            var result = Evaluate(fieldExpr, environment);
+            var result = await EvaluateAsync(fieldExpr, environment);
             if (result.IsFailure)
             {
                 return result;
@@ -173,14 +344,14 @@ public sealed class Evaluator
         return Result<KlexirValue>.Success(new RecordValue(construct.TypeName, fields));
     }
 
-    private static Result<KlexirValue> EvaluateList(
+    private static async Task<Result<KlexirValue>> EvaluateListAsync(
         IReadOnlyList<TypedExpr> elements, IReadOnlyDictionary<string, KlexirValue> environment)
     {
         var values = new List<KlexirValue>(elements.Count);
 
         foreach (var element in elements)
         {
-            var result = Evaluate(element, environment);
+            var result = await EvaluateAsync(element, environment);
             if (result.IsFailure)
             {
                 return result;
@@ -192,7 +363,7 @@ public sealed class Evaluator
         return Result<KlexirValue>.Success(new ListValue(values));
     }
 
-    private static Result<KlexirValue> ApplyFilter(KlexirValue container, KlexirValue predicate)
+    private static async Task<Result<KlexirValue>> ApplyFilterAsync(KlexirValue container, KlexirValue predicate)
     {
         if (container is not ListValue list)
         {
@@ -203,7 +374,7 @@ public sealed class Evaluator
 
         foreach (var element in list.Elements)
         {
-            var keptResult = ApplyClosure(predicate, element);
+            var keptResult = await ApplyClosureAsync(predicate, element);
             if (keptResult.IsFailure)
             {
                 return keptResult;
@@ -223,7 +394,7 @@ public sealed class Evaluator
         return Result<KlexirValue>.Success(new ListValue(kept));
     }
 
-    private static Result<KlexirValue> ApplyFold(KlexirValue container, KlexirValue initial, KlexirValue folder)
+    private static async Task<Result<KlexirValue>> ApplyFoldAsync(KlexirValue container, KlexirValue initial, KlexirValue folder)
     {
         if (container is not ListValue list)
         {
@@ -234,25 +405,57 @@ public sealed class Evaluator
 
         foreach (var element in list.Elements)
         {
-            var stepped = ApplyClosure(folder, accumulator).Bind(step => ApplyClosure(step, element));
-            if (stepped.IsFailure)
+            var stepResult = await ApplyClosureAsync(folder, accumulator);
+            if (stepResult.IsFailure)
             {
-                return stepped;
+                return stepResult;
             }
 
-            accumulator = stepped.Value;
+            var finalResult = await ApplyClosureAsync(stepResult.Value, element);
+            if (finalResult.IsFailure)
+            {
+                return finalResult;
+            }
+
+            accumulator = finalResult.Value;
         }
 
         return Result<KlexirValue>.Success(accumulator);
     }
 
-    private static Result<KlexirValue> ApplyClosure(KlexirValue function, KlexirValue argument) =>
+    private static async Task<Result<KlexirValue>> ApplyClosureAsync(KlexirValue function, KlexirValue argument) =>
         function switch
         {
-            ClosureValue closure => Evaluate(closure.Body, WithBinding(closure.Environment, closure.ParamName, argument)),
+            ClosureValue closure => await EvaluateAsync(closure.Body, WithBinding(closure.Environment, closure.ParamName, argument)),
             ConstructorValue ctor => ApplyConstructor(ctor, argument),
+            NativeFunctionValue native => await ApplyNativeAsync(native, argument),
             _ => Result<KlexirValue>.Failure(Error.Create("Attempted to apply a non-function value.")),
         };
+
+    /// <summary>
+    /// Applies one more argument to a plugin's native function, mirroring <see cref="ApplyConstructor"/>: once
+    /// <c>AppliedArgs</c> reaches the declared <see cref="KlexirNativeFunctionDef.Arity"/>, awaits
+    /// <see cref="KlexirNativeFunctionDef.Invoke"/> — catching any exception it throws and turning it into a failed
+    /// <see cref="Result{T}"/>, since Klexir never lets a native call's exception escape as a thrown exception.
+    /// </summary>
+    private static async Task<Result<KlexirValue>> ApplyNativeAsync(NativeFunctionValue native, KlexirValue argument)
+    {
+        var appliedArgs = new List<KlexirValue>(native.AppliedArgs) { argument };
+
+        if (appliedArgs.Count < native.Def.Arity)
+        {
+            return Result<KlexirValue>.Success(new NativeFunctionValue(native.Def, appliedArgs));
+        }
+
+        try
+        {
+            return await native.Def.Invoke(appliedArgs);
+        }
+        catch (Exception ex)
+        {
+            return Result<KlexirValue>.Failure(Error.Create($"Native function '{native.Def.Name}' failed: {ex.Message}"));
+        }
+    }
 
     private static Result<KlexirValue> ApplyConstructor(ConstructorValue ctor, KlexirValue argument)
     {
@@ -264,24 +467,43 @@ public sealed class Evaluator
     }
 
     /// <summary>The Functor operation: transforms the value inside Some/Ok, leaves None/Err untouched.</summary>
-    private static Result<KlexirValue> ApplyMap(KlexirValue container, KlexirValue mapper) =>
-        container switch
+    private static async Task<Result<KlexirValue>> ApplyMapAsync(KlexirValue container, KlexirValue mapper)
+    {
+        switch (container)
         {
-            SomeValue some => ApplyClosure(mapper, some.Value).Bind(value => Result<KlexirValue>.Success(new SomeValue(value))),
-            NoneValue => Result<KlexirValue>.Success(container),
-            OkValue ok => ApplyClosure(mapper, ok.Value).Bind(value => Result<KlexirValue>.Success(new OkValue(value))),
-            ErrValue => Result<KlexirValue>.Success(container),
-            ListValue list => ApplyMapList(list, mapper),
-            _ => Result<KlexirValue>.Failure(Error.Create("'map' requires an Option, Result, or List value.")),
-        };
+            case SomeValue some:
+            {
+                var result = await ApplyClosureAsync(mapper, some.Value);
+                return result.IsFailure ? result : Result<KlexirValue>.Success(new SomeValue(result.Value));
+            }
 
-    private static Result<KlexirValue> ApplyMapList(ListValue list, KlexirValue mapper)
+            case NoneValue:
+                return Result<KlexirValue>.Success(container);
+
+            case OkValue ok:
+            {
+                var result = await ApplyClosureAsync(mapper, ok.Value);
+                return result.IsFailure ? result : Result<KlexirValue>.Success(new OkValue(result.Value));
+            }
+
+            case ErrValue:
+                return Result<KlexirValue>.Success(container);
+
+            case ListValue list:
+                return await ApplyMapListAsync(list, mapper);
+
+            default:
+                return Result<KlexirValue>.Failure(Error.Create("'map' requires an Option, Result, or List value."));
+        }
+    }
+
+    private static async Task<Result<KlexirValue>> ApplyMapListAsync(ListValue list, KlexirValue mapper)
     {
         var mapped = new List<KlexirValue>(list.Elements.Count);
 
         foreach (var element in list.Elements)
         {
-            var result = ApplyClosure(mapper, element);
+            var result = await ApplyClosureAsync(mapper, element);
             if (result.IsFailure)
             {
                 return result;
@@ -294,12 +516,12 @@ public sealed class Evaluator
     }
 
     /// <summary>The Monad operation: chains a container-returning function, short-circuiting on None/Err.</summary>
-    private static Result<KlexirValue> ApplyBind(KlexirValue container, KlexirValue mapper) =>
+    private static async Task<Result<KlexirValue>> ApplyBindAsync(KlexirValue container, KlexirValue mapper) =>
         container switch
         {
-            SomeValue some => ApplyClosure(mapper, some.Value),
+            SomeValue some => await ApplyClosureAsync(mapper, some.Value),
             NoneValue => Result<KlexirValue>.Success(container),
-            OkValue ok => ApplyClosure(mapper, ok.Value),
+            OkValue ok => await ApplyClosureAsync(mapper, ok.Value),
             ErrValue => Result<KlexirValue>.Success(container),
             _ => Result<KlexirValue>.Failure(Error.Create("'bind' requires an Option or Result value.")),
         };
@@ -309,13 +531,13 @@ public sealed class Evaluator
     /// own name to that same dictionary after the closure exists — so when the closure is later called, its
     /// captured environment already contains itself, and it can recurse.
     /// </summary>
-    private static Result<KlexirValue> EvaluateLetRec(TypedLetRecExpr letRec, IReadOnlyDictionary<string, KlexirValue> environment)
+    private static Task<Result<KlexirValue>> EvaluateLetRecAsync(TypedLetRecExpr letRec, IReadOnlyDictionary<string, KlexirValue> environment)
     {
         var recursiveEnvironment = new Dictionary<string, KlexirValue>(environment);
         var closure = new ClosureValue(letRec.ParamName, letRec.FunctionBody, recursiveEnvironment);
         recursiveEnvironment[letRec.Name] = closure;
 
-        return Evaluate(letRec.LetBody, WithBinding(environment, letRec.Name, closure));
+        return EvaluateAsync(letRec.LetBody, WithBinding(environment, letRec.Name, closure));
     }
 
     private static Result<KlexirValue> ApplyBinary(BinaryOperator op, KlexirValue left, KlexirValue right)
