@@ -1,0 +1,16 @@
+// REPOSITORY — possiede i dati, risponde a UNA sola domanda, non sa nulla di validazione o controller.
+record User { CodiceFiscale: String, Age: Int };
+
+let existingUsers = [
+    User { CodiceFiscale: "RSSMRA80A01H501U", Age: 45 },
+    User { CodiceFiscale: "VRDLGU90B02F205X", Age: 34 }
+];
+
+let existsInRepo = func(String cf) =>
+    fold(filter(existingUsers, func(User u) => u.CodiceFiscale == cf), 0,
+        func(Int acc) => func(User u) => acc + 1) > 0;
+
+// TODO: se ti serve un vero database, esponilo tramite un plugin (vedi IKlexirPlugin) —
+// il repository resta comunque il solo posto che sa DOVE vivono i dati.
+
+if existsInRepo "RSSMRA80A01H501U" then 1 else 0

@@ -32,6 +32,14 @@ true
 
 A lex/parse/type error prints the file and a position, and the process exits non-zero — see [`editors/vscode/README.md`](editors/vscode/README.md) for installing the extension.
 
+Starting a new program from scratch, `klexir new` scaffolds a small clean-architecture skeleton — a `Program.klx` (model/repository/validators/service/controller sections, already runnable, `TODO`s marking what to fill in for your own domain) plus a `samples/` folder with one focused, independently-runnable example per layer to copy the pattern from — no multi-file import system exists yet (see below), so `samples/` is reference material, not something `Program.klx` links against:
+
+```bash
+dotnet run --project src/Klexir.Cli -- new MyApp
+cd MyApp
+klexir run Program.klx
+```
+
 ---
 
 ## Quick example

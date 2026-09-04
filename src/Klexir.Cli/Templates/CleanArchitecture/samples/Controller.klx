@@ -1,0 +1,17 @@
+// CONTROLLER — l'unico livello a cui e' permesso trasformare un Result in una risposta semplice.
+record User { CodiceFiscale: String, Age: Int };
+union RegistrationOutcome { Registered(Int), Rejected(Int) };
+
+let checkAdult = func(User u) =>
+    if u.Age >= 18 then Ok<Int>(u) else Err<User>(1);
+
+let registerUser = func(User u) =>
+    match checkAdult u with
+        Ok(valid) => Registered 1
+        | Err(code) => Rejected code;
+// TODO: se hai piu' di un esito di successo, aggiungi altre varianti a RegistrationOutcome
+// invece di far tornare sempre lo stesso Int — un tipo esplicito batte un numero magico.
+
+match registerUser (User { CodiceFiscale: "RSSMRA80A01H501U", Age: 25 }) with
+    Registered(id) => id
+    | Rejected(code) => 0 - code

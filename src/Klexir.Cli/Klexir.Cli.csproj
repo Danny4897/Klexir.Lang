@@ -10,4 +10,9 @@
     <ProjectReference Include="..\Klexir.Lang\Klexir.Lang.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Project scaffold for 'klexir new' — copied next to the built exe so it's found via AppContext.BaseDirectory. -->
+    <None Include="Templates\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

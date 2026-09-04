@@ -1,0 +1,13 @@
+// VALIDATORS — funzioni atomiche: un solo controllo, un solo motivo di fallimento, non sanno l'una dell'altra.
+record User { CodiceFiscale: String, Age: Int };
+
+let checkAdult = func(User u) =>
+    if u.Age >= 18 then Ok<Int>(u) else Err<User>(1);   // 1 = minorenne
+
+let checkCodiceFiscale = func(User u) =>
+    if u.CodiceFiscale == "" then Err<User>(2) else Ok<Int>(u);   // 2 = codice fiscale mancante
+
+// TODO: aggiungi qui i TUOI controlli — stessa forma sempre: prendi l'entita', restituisci
+// Ok(entita') se il controllo passa, Err(codice) se fallisce. Firme identiche = componibili.
+
+match checkAdult (User { CodiceFiscale: "RSSMRA80A01H501U", Age: 15 }) with Ok(x) => 0 | Err(code) => code

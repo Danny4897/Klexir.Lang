@@ -8,6 +8,12 @@ var pluginNames = args.Where(a => a.StartsWith("--plugin=", StringComparison.Ord
 
 var positional = args.Where(a => !a.StartsWith("--plugin=", StringComparison.OrdinalIgnoreCase)).ToArray();
 
+if (positional is ["new", var projectName, ..])
+{
+    var baseDir = positional.Length > 2 ? positional[2] : Directory.GetCurrentDirectory();
+    return CreateProjectFromTemplate(projectName, Path.Combine(baseDir, projectName));
+}
+
 var (command, path) = positional switch
 {
     ["run", var file] => ("run", file),
@@ -20,13 +26,15 @@ if (command is null || path is null)
 {
     Console.Error.WriteLine("""
         Usage:
-          klexir run [--plugin=<name>]... <file.klx>     Run a Klexir program (tree-walking evaluator)
-          klexir compile <file.klx>                      Compile to Klexir.Runtime bytecode and run it there
+          klexir new <ProjectName> [directory]            Scaffold a clean-architecture project skeleton
+          klexir run [--plugin=<name>]... <file.klx>      Run a Klexir program (tree-walking evaluator)
+          klexir compile <file.klx>                       Compile to Klexir.Runtime bytecode and run it there
 
         Available plugins (run only — compile doesn't support plugins yet):
           clock     now/delay — see Klexir.Lang.Plugins.ClockPlugin
 
         Example:
+          klexir new MyApp
           klexir run hello.klx
           klexir run --plugin=clock uses-clock.klx
           klexir compile hello.klx
@@ -149,6 +157,41 @@ static async Task<int> RunCompiled(string path)
     }
 
     Console.WriteLine(result.Value);
+    return 0;
+}
+
+static int CreateProjectFromTemplate(string projectName, string targetDir)
+{
+    var templateDir = Path.Combine(AppContext.BaseDirectory, "Templates", "CleanArchitecture");
+    if (!Directory.Exists(templateDir))
+    {
+        Console.Error.WriteLine($"error: template not found at '{templateDir}' — is the CLI built/published correctly?");
+        return 2;
+    }
+
+    if (Directory.Exists(targetDir) && Directory.EnumerateFileSystemEntries(targetDir).Any())
+    {
+        Console.Error.WriteLine($"error: '{targetDir}' already exists and isn't empty.");
+        return 2;
+    }
+
+    Directory.CreateDirectory(targetDir);
+
+    foreach (var sourceFile in Directory.EnumerateFiles(templateDir, "*", SearchOption.AllDirectories))
+    {
+        var relativePath = Path.GetRelativePath(templateDir, sourceFile);
+        var destFile = Path.Combine(targetDir, relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(destFile)!);
+
+        var content = File.ReadAllText(sourceFile).Replace("{{PROJECT_NAME}}", projectName);
+        File.WriteAllText(destFile, content);
+    }
+
+    Console.WriteLine($"Created '{projectName}' at {targetDir}");
+    Console.WriteLine();
+    Console.WriteLine("Next:");
+    Console.WriteLine($"  cd {Path.GetRelativePath(Directory.GetCurrentDirectory(), targetDir)}");
+    Console.WriteLine("  klexir run Program.klx");
     return 0;
 }
 

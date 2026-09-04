@@ -1,0 +1,9 @@
+// MODEL — il dato del tuo dominio, niente logica qui dentro.
+// record = prodotto di campi con nome; union = "e' esattamente una di queste forme".
+record User { CodiceFiscale: String, Age: Int };
+union RegistrationOutcome { Registered(Int), Rejected(Int) };
+
+// TODO: modella il TUO dominio con record/union — quali campi ha la tua entita'?
+// quali esiti distinti puo' avere un'operazione su di essa (successo con dati, fallimento con motivo)?
+
+User { CodiceFiscale: "RSSMRA80A01H501U", Age: 30 }

@@ -1,0 +1,15 @@
+// SERVICE — orchestra i validator atomici con andThen. L'ordine dei controlli vive SOLO qui.
+record User { CodiceFiscale: String, Age: Int };
+
+let checkAdult = func(User u) =>
+    if u.Age >= 18 then Ok<Int>(u) else Err<User>(1);
+
+let checkCodiceFiscale = func(User u) =>
+    if u.CodiceFiscale == "" then Err<User>(2) else Ok<Int>(u);
+
+let validateNewUser = func(User u) =>
+    checkAdult u andThen checkCodiceFiscale;
+// TODO: aggiungi altri passi qui: checkAdult u andThen checkCodiceFiscale andThen checkAltro.
+// Cambiare l'ordine dei controlli significa toccare SOLO questa riga.
+
+match validateNewUser (User { CodiceFiscale: "RSSMRA80A01H501U", Age: 25 }) with Ok(x) => 0 | Err(code) => code

@@ -1,0 +1,44 @@
+// ============================================================
+// MODEL — il dato del tuo dominio. Guarda samples/Model.klx per un altro esempio.
+// ============================================================
+record Entity { Id: Int, Value: Int };
+// TODO: sostituisci Entity con il tuo dominio reale (es. User, Order, Product...)
+
+// ============================================================
+// REPOSITORY — possiede i dati, una sola responsabilita'. Guarda samples/Repository.klx.
+// ============================================================
+let existingEntities = [
+    Entity { Id: 1, Value: 100 }
+];
+// TODO: sostituisci con i tuoi dati di partenza, o collega uno storage vero tramite un plugin.
+
+let existsInRepo = func(Int id) =>
+    fold(filter(existingEntities, func(Entity e) => e.Id == id), 0,
+        func(Int acc) => func(Entity e) => acc + 1) > 0;
+
+// ============================================================
+// VALIDATORS — funzioni atomiche, un solo motivo di fallimento ciascuna. Guarda samples/Validators.klx.
+// ============================================================
+let checkNotInRepo = func(Entity e) =>
+    if existsInRepo e.Id then Err<Entity>(1) else Ok<Int>(e);   // 1 = gia' esistente
+// TODO: aggiungi altri controlli atomici, uno per regola di business (checkX, checkY, ...).
+
+// ============================================================
+// SERVICE — orchestra i validator con andThen, in un ordine esplicito. Guarda samples/Service.klx.
+// ============================================================
+let validateEntity = func(Entity e) =>
+    checkNotInRepo e;
+// TODO: man mano che aggiungi validator, incatenali qui: checkNotInRepo e andThen checkX andThen checkY.
+
+// ============================================================
+// CONTROLLER — l'unico punto che trasforma un Result in una risposta. Guarda samples/Controller.klx.
+// ============================================================
+let handleCreate = func(Entity e) =>
+    match validateEntity e with Ok(valid) => 0 | Err(code) => code;
+// TODO: se hai piu' di un caso di successo, sostituisci l'Int di ritorno con un union esplicito
+// (vedi la lezione 6 del tutorial: "MVP 6/6 — Programma completo").
+
+// ============================================================
+// ESEGUI — prova il flusso end-to-end. 0 = creato, un numero positivo = codice di errore.
+// ============================================================
+handleCreate (Entity { Id: 2, Value: 50 })
