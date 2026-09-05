@@ -20,5 +20,8 @@
     <!-- TEMPORARY, same reasoning as Klexir.Runtime/Klexir.EventFlow above: Klexir.Actor isn't published either. -->
     <ProjectReference Include="..\..\..\Klexir.Actor\src\Klexir.Actor.Abstractions\Klexir.Actor.Abstractions.csproj" />
     <ProjectReference Include="..\..\..\Klexir.Actor\src\Klexir.Actor\Klexir.Actor.csproj" />
+    <!-- TEMPORARY, same reasoning as above: Klexir.Workflow isn't published either. -->
+    <ProjectReference Include="..\..\..\Klexir.Workflow\src\Klexir.Workflow.Abstractions\Klexir.Workflow.Abstractions.csproj" />
+    <ProjectReference Include="..\..\..\Klexir.Workflow\src\Klexir.Workflow\Klexir.Workflow.csproj" />
   </ItemGroup>
 </Project>

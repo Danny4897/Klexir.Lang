@@ -1,0 +1,9 @@
+// Esegui con: klexir run --plugin=workflow 21-workflow.klx
+// defineStep accumula un passo alla volta; ogni passo e' String -> Result<String, String>.
+// runWorkflow li esegue tutti in ordine su un vero Klexir.Workflow.WorkflowEngine, con checkpoint dopo ogni passo.
+let validate = defineStep "checkout" "validate" (func(String order) =>
+    if order == "" then Err<String>("carrello vuoto") else Ok<String>(order));
+let charge = defineStep "checkout" "charge" (func(String order) => Ok<String>(order + " [addebitato]"));
+let ship = defineStep "checkout" "ship" (func(String order) => Ok<String>(order + " [spedito]"));
+
+runWorkflow "checkout" "ordine#42"
