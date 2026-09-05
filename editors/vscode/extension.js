@@ -24,6 +24,7 @@ const LESSONS = [
   { id: "19", file: "19-eventflow.klx", md: "19-eventflow.md", title: "Pub/sub con EventFlow", subtitle: "il primo pezzo dell'ecosistema, collegato per davvero" },
   { id: "20", file: "20-actor.klx", md: "20-actor.md", title: "Attori con Klexir.Actor", subtitle: "mailbox reali, una transizione alla volta" },
   { id: "21", file: "21-workflow.klx", md: "21-workflow.md", title: "Workflow con Klexir.Workflow", subtitle: "passi con nome, checkpoint reali" },
+  { id: "22", file: "22-engine.klx", md: "22-engine.md", title: "Un database con Klexir.Engine", subtitle: "l'unico plugin che sopravvive al programma" },
 ];
 
 const COMPLETED_KEY = "klexir.completedLessons";

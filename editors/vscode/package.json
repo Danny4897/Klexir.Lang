@@ -2,7 +2,7 @@
   "name": "klexir-lang",
   "displayName": "Klexir Language Support",
   "description": "Syntax highlighting, a Run command, and an interactive tutorial for Klexir (.klx) files.",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "publisher": "danny4897",
   "engines": {
     "vscode": "^1.85.0"
@@ -81,7 +81,8 @@
       { "command": "klexir.openSample.18", "title": "Klexir Tutorial: Open \"HTTP endpoint\" sample" },
       { "command": "klexir.openSample.19", "title": "Klexir Tutorial: Open \"EventFlow pub/sub\" sample" },
       { "command": "klexir.openSample.20", "title": "Klexir Tutorial: Open \"Actor\" sample" },
-      { "command": "klexir.openSample.21", "title": "Klexir Tutorial: Open \"Workflow\" sample" }
+      { "command": "klexir.openSample.21", "title": "Klexir Tutorial: Open \"Workflow\" sample" },
+      { "command": "klexir.openSample.22", "title": "Klexir Tutorial: Open \"Engine\" sample" }
     ],
     "menus": {
       "editor/title/run": [

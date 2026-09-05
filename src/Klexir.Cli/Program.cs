@@ -51,6 +51,7 @@ if (command is null || path is null)
           eventflow   subscribe/publish over a real Klexir.EventFlow.InMemoryEventBus
           actor       spawn/tell/ask over a real Klexir.Actor channel-backed mailbox
           workflow    defineStep/runWorkflow over a real Klexir.Workflow.WorkflowEngine
+          engine      dbOpen/dbPut/dbGet over a real Klexir.Engine page-backed B+Tree file
 
         Example:
           klexir new MyApp
@@ -59,6 +60,7 @@ if (command is null || path is null)
           klexir run --plugin=eventflow events.klx
           klexir run --plugin=actor actors.klx
           klexir run --plugin=workflow saga.klx
+          klexir run --plugin=engine store.klx
           klexir compile hello.klx
           klexir serve --port=5000 api.klx
         """);
@@ -113,6 +115,8 @@ if (typed.IsFailure)
 }
 
 var result = await evaluator.EvaluateAsync(typed.Value, plugins);
+await DisposePluginsAsync(plugins);
+
 if (result.IsFailure)
 {
     Console.Error.WriteLine($"{path}: runtime error: {result.Error.Message}");
@@ -286,6 +290,7 @@ static async Task<int> Serve(string path, int port, IReadOnlyList<string> plugin
         await HandleRequestAsync(context, evaluator, handler);
     }
 
+    await DisposePluginsAsync(plugins);
     return 0;
 }
 
@@ -358,5 +363,22 @@ static IKlexirPlugin ResolvePlugin(string name, Evaluator evaluator) => name.ToL
     "eventflow" => new EventFlowPlugin(evaluator),
     "actor" => new ActorPlugin(evaluator),
     "workflow" => new WorkflowPlugin(evaluator),
-    _ => throw new ArgumentException($"unknown plugin '{name}' (available: clock, eventflow, actor, workflow)"),
+    "engine" => new EnginePlugin(),
+    _ => throw new ArgumentException($"unknown plugin '{name}' (available: clock, eventflow, actor, workflow, engine)"),
 };
+
+/// <summary>
+/// Disposes every plugin that needs it (currently just <see cref="EnginePlugin"/>, whose buffered writes only
+/// reach disk on disposal) — called after evaluation whether it succeeded or failed, so a run that errors out
+/// midway still flushes whatever it managed to write.
+/// </summary>
+static async Task DisposePluginsAsync(IReadOnlyList<IKlexirPlugin> plugins)
+{
+    foreach (var plugin in plugins)
+    {
+        if (plugin is IAsyncDisposable disposable)
+        {
+            await disposable.DisposeAsync();
+        }
+    }
+}

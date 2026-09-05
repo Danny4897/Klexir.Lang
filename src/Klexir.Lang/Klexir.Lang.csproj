@@ -23,5 +23,8 @@
     <!-- TEMPORARY, same reasoning as above: Klexir.Workflow isn't published either. -->
     <ProjectReference Include="..\..\..\Klexir.Workflow\src\Klexir.Workflow.Abstractions\Klexir.Workflow.Abstractions.csproj" />
     <ProjectReference Include="..\..\..\Klexir.Workflow\src\Klexir.Workflow\Klexir.Workflow.csproj" />
+    <!-- TEMPORARY, same reasoning as above: Klexir.Engine isn't published either. -->
+    <ProjectReference Include="..\..\..\Klexir.Engine\src\Klexir.Engine.Abstractions\Klexir.Engine.Abstractions.csproj" />
+    <ProjectReference Include="..\..\..\Klexir.Engine\src\Klexir.Engine\Klexir.Engine.csproj" />
   </ItemGroup>
 </Project>

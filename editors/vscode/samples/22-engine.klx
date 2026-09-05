@@ -1,0 +1,7 @@
+// Esegui con: klexir run --plugin=engine 22-engine.klx -- PROVA A ESEGUIRLO PIU' VOLTE.
+// dbOpen apre (o crea) un file reale su disco; dbPut/dbGet leggono e scrivono un vero B+Tree page-backed.
+// Il tree e' insert-only: scrivere una chiave gia' presente non sovrascrive, torna Err -- catturabile, non un crash.
+let opened = dbOpen "klexir-demo.db";
+let seeded = match dbPut 42 1234 with Ok(x) => true | Err(e) => true;
+
+match dbGet 42 with Ok(v) => v | Err(e) => 0 - 1
