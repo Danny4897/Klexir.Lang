@@ -49,12 +49,14 @@ if (command is null || path is null)
         Available plugins (run/serve only — compile doesn't support plugins yet):
           clock       now/delay — see Klexir.Lang.Plugins.ClockPlugin
           eventflow   subscribe/publish over a real Klexir.EventFlow.InMemoryEventBus
+          actor       spawn/tell/ask over a real Klexir.Actor channel-backed mailbox
 
         Example:
           klexir new MyApp
           klexir run hello.klx
           klexir run --plugin=clock uses-clock.klx
           klexir run --plugin=eventflow events.klx
+          klexir run --plugin=actor actors.klx
           klexir compile hello.klx
           klexir serve --port=5000 api.klx
         """);
@@ -352,5 +354,6 @@ static IKlexirPlugin ResolvePlugin(string name, Evaluator evaluator) => name.ToL
 {
     "clock" => new ClockPlugin(),
     "eventflow" => new EventFlowPlugin(evaluator),
-    _ => throw new ArgumentException($"unknown plugin '{name}' (available: clock, eventflow)"),
+    "actor" => new ActorPlugin(evaluator),
+    _ => throw new ArgumentException($"unknown plugin '{name}' (available: clock, eventflow, actor)"),
 };

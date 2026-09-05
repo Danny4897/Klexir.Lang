@@ -22,6 +22,7 @@ const LESSONS = [
   { id: "17", file: "17-mvp-complete.klx", md: "17-mvp-complete.md", title: "MVP 6/6: Programma completo", subtitle: "checklist di clean code" },
   { id: "18", file: "18-http-endpoint.klx", md: "18-http-endpoint.md", title: "Endpoint HTTP vero", subtitle: "klexir serve — I/O che guida Klexir" },
   { id: "19", file: "19-eventflow.klx", md: "19-eventflow.md", title: "Pub/sub con EventFlow", subtitle: "il primo pezzo dell'ecosistema, collegato per davvero" },
+  { id: "20", file: "20-actor.klx", md: "20-actor.md", title: "Attori con Klexir.Actor", subtitle: "mailbox reali, una transizione alla volta" },
 ];
 
 const COMPLETED_KEY = "klexir.completedLessons";

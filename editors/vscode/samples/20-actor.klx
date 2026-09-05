@@ -1,0 +1,8 @@
+// Esegui con: klexir run --plugin=actor 20-actor.klx
+// spawn crea un attore con nome, stato iniziale e comportamento (closure curried: messaggio -> stato -> nuovo stato).
+// ask invia un messaggio e ASPETTA lo stato risultante -- una transizione alla volta, sempre, senza lock scritti a mano.
+let started = spawn "cart" "" (func(String item) => func(String state) => state + item);
+
+let afterMela = ask "cart" "mela;";
+let afterPane = ask "cart" "pane;";
+ask "cart" "vino;"
